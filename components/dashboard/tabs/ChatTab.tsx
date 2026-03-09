@@ -12,19 +12,13 @@ interface ChatTabProps {
   onClearChat: () => void;
 }
 
-const SUGGESTED_QUESTIONS = [
+const INITIAL_SUGGESTIONS = [
   'What is the overall financial health of this property?',
   'Why is the NOI margin where it is?',
   'Which months had the highest vacancy rate?',
   'What are the top 3 areas to reduce expenses?',
   'How does the cash flow compare to net income?',
   'Is the payroll percentage within industry norms?',
-  'What trends should I be concerned about?',
-  'How is the management fee performing vs benchmark?',
-  'What months had negative NOI and why?',
-  'Which expenses are growing the fastest?',
-  'What is the break-even occupancy rate?',
-  'How are utilities trending over the period?',
 ];
 
 function renderMessage(content: string) {
@@ -45,27 +39,44 @@ function renderMessage(content: string) {
 
 export default function ChatTab({ analysis, chatHistory, isChatStreaming, onSend, onClearChat }: ChatTabProps) {
   const [input, setInput] = useState('');
-  const [suggestions] = useState(() => {
-    // Pick 6 random suggestions
-    const shuffled = [...SUGGESTED_QUESTIONS].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 6);
-  });
+  const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const prevStreamingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory]);
 
-  function handleSend() {
-    const q = input.trim();
-    if (!q || isChatStreaming) return;
-    setInput('');
-    onSend(q);
-  }
+  // When streaming ends, fetch contextual follow-up suggestions
+  useEffect(() => {
+    const wasStreaming = prevStreamingRef.current;
+    prevStreamingRef.current = isChatStreaming;
 
-  function handleSuggestion(q: string) {
-    if (isChatStreaming) return;
-    onSend(q);
+    if (wasStreaming && !isChatStreaming && chatHistory.length >= 2) {
+      const lastAssistant = [...chatHistory].reverse().find(m => m.role === 'assistant');
+      const lastUser = [...chatHistory].reverse().find(m => m.role === 'user');
+      if (lastAssistant?.content && lastUser?.content) {
+        setLoadingSuggestions(true);
+        fetch('/api/chat/suggestions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: lastUser.content, answer: lastAssistant.content }),
+        })
+          .then(r => r.json())
+          .then(data => setFollowUpSuggestions(data.suggestions ?? []))
+          .catch(() => setFollowUpSuggestions([]))
+          .finally(() => setLoadingSuggestions(false));
+      }
+    }
+  }, [isChatStreaming, chatHistory]);
+
+  function handleSend(q?: string) {
+    const text = (q ?? input).trim();
+    if (!text || isChatStreaming) return;
+    setInput('');
+    setFollowUpSuggestions([]);
+    onSend(text);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -75,10 +86,12 @@ export default function ChatTab({ analysis, chatHistory, isChatStreaming, onSend
     }
   }
 
+  const isEmpty = chatHistory.length === 0;
+
   return (
     <div className="flex flex-col h-full" style={{ maxHeight: 'calc(100vh - 200px)' }}>
-      {/* Header row with clear button */}
-      {chatHistory.length > 0 && (
+      {/* Clear button */}
+      {!isEmpty && (
         <div className="flex justify-end mb-2">
           <button
             onClick={onClearChat}
@@ -90,24 +103,21 @@ export default function ChatTab({ analysis, chatHistory, isChatStreaming, onSend
           </button>
         </div>
       )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 pb-4">
-        {chatHistory.length === 0 ? (
+        {isEmpty ? (
           <div className="space-y-4">
             <p className="text-sm text-center" style={{ color: 'var(--muted)' }}>
               Ask any question about {analysis.statement.propertyName}
             </p>
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
-              {suggestions.map((q, i) => (
+              {INITIAL_SUGGESTIONS.map((q, i) => (
                 <button
                   key={i}
-                  onClick={() => handleSuggestion(q)}
+                  onClick={() => handleSend(q)}
                   className="text-left p-3 text-xs rounded-lg border transition-colors hover:opacity-80"
-                  style={{
-                    borderColor: 'var(--border)',
-                    backgroundColor: 'var(--surface)',
-                    color: 'var(--text)',
-                  }}
+                  style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text)' }}
                 >
                   {q}
                 </button>
@@ -115,58 +125,69 @@ export default function ChatTab({ analysis, chatHistory, isChatStreaming, onSend
             </div>
           </div>
         ) : (
-          chatHistory.map((msg, i) => (
-            <div
-              key={i}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className="max-w-[85%] rounded-lg p-3"
-                style={{
-                  backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--surface)',
-                  color: msg.role === 'user' ? 'white' : 'var(--text)',
-                  border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none',
-                }}
-              >
-                {msg.role === 'assistant' ? (
-                  renderMessage(msg.content)
+          <>
+            {chatHistory.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className="max-w-[85%] rounded-lg p-3"
+                  style={{
+                    backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--surface)',
+                    color: msg.role === 'user' ? 'white' : 'var(--text)',
+                    border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none',
+                  }}
+                >
+                  {msg.role === 'assistant' ? renderMessage(msg.content) : <p className="text-sm">{msg.content}</p>}
+                  {msg.role === 'assistant' && i === chatHistory.length - 1 && isChatStreaming && (
+                    <span
+                      className="inline-block w-1 h-4 ml-0.5 animate-pulse"
+                      style={{ backgroundColor: 'var(--accent)', verticalAlign: 'middle' }}
+                    />
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {isChatStreaming && chatHistory[chatHistory.length - 1]?.role === 'user' && (
+              <div className="flex justify-start">
+                <div className="rounded-lg p-3 text-sm" style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)' }}>
+                  Thinking...
+                </div>
+              </div>
+            )}
+
+            {/* Contextual follow-up suggestions */}
+            {!isChatStreaming && (followUpSuggestions.length > 0 || loadingSuggestions) && (
+              <div className="space-y-1.5">
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>You might also ask:</p>
+                {loadingSuggestions ? (
+                  <div className="flex gap-1">
+                    {[80, 60, 70].map((w, i) => (
+                      <div key={i} className="h-7 rounded-full animate-pulse" style={{ width: w + '%', backgroundColor: 'var(--border)' }} />
+                    ))}
+                  </div>
                 ) : (
-                  <p className="text-sm">{msg.content}</p>
-                )}
-                {msg.role === 'assistant' && i === chatHistory.length - 1 && isChatStreaming && (
-                  <span
-                    className="inline-block w-1 h-4 ml-0.5 animate-pulse"
-                    style={{ backgroundColor: 'var(--accent)', verticalAlign: 'middle' }}
-                  />
+                  <div className="flex flex-wrap gap-2">
+                    {followUpSuggestions.map((s, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSend(s)}
+                        className="text-xs px-3 py-1.5 rounded-full border transition-colors hover:opacity-80"
+                        style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text)' }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
-            </div>
-          ))
+            )}
+          </>
         )}
-
-        {isChatStreaming && chatHistory[chatHistory.length - 1]?.role === 'user' && (
-          <div className="flex justify-start">
-            <div
-              className="rounded-lg p-3 text-sm"
-              style={{
-                backgroundColor: 'var(--surface)',
-                border: '1px solid var(--border)',
-                color: 'var(--muted)',
-              }}
-            >
-              Thinking...
-            </div>
-          </div>
-        )}
-
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <div
-        className="pt-4 border-t"
-        style={{ borderColor: 'var(--border)' }}
-      >
+      <div className="pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
         <div className="flex gap-2">
           <textarea
             value={input}
@@ -179,7 +200,7 @@ export default function ChatTab({ analysis, chatHistory, isChatStreaming, onSend
             style={{ backgroundColor: 'var(--bg)' }}
           />
           <button
-            onClick={handleSend}
+            onClick={() => handleSend()}
             disabled={!input.trim() || isChatStreaming}
             className="btn-primary px-4 self-end"
           >

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { buildFinancialContext } from '@/lib/agents/base';
@@ -16,7 +16,7 @@ import ExpensesTab from '@/components/dashboard/tabs/ExpensesTab';
 import RatiosTab from '@/components/dashboard/tabs/RatiosTab';
 import TrendsTab from '@/components/dashboard/tabs/TrendsTab';
 import AnomaliesTab from '@/components/dashboard/tabs/AnomaliesTab';
-import DealDetailsTab from '@/components/dashboard/tabs/DealDetailsTab';
+import DealDetailsTab, { type DealInputs, DEFAULT_DEAL_INPUTS } from '@/components/dashboard/tabs/DealDetailsTab';
 import ChatTab from '@/components/dashboard/tabs/ChatTab';
 import CustomChartsTab from '@/components/dashboard/tabs/CustomChartsTab';
 
@@ -53,10 +53,34 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
   const [activeTab, setActiveTab] = useState('summary');
   const [history, setHistory] = useState<HistoryEntry[]>(initialHistory);
   const [customCharts, setCustomCharts] = useState<Array<{ spec: ChartSpec; explanation: string; title: string }>>([]);
+  const [dealInputs, setDealInputs] = useState<DealInputs>(DEFAULT_DEAL_INPUTS);
   const [anomalyExplanations, setAnomalyExplanations] = useState<Record<number, string>>({});
   const [resolvedAnomalies, setResolvedAnomalies] = useState<Set<number>>(new Set());
   const [showForceConfirm, setShowForceConfirm] = useState(false);
   const selectedFileRef = useRef<File | null>(null);
+
+  // Persist tool state to localStorage keyed by fileHash
+  useEffect(() => {
+    if (!analysis) return;
+    try { localStorage.setItem(`sa_charts_${analysis.fileHash}`, JSON.stringify(customCharts)); } catch {}
+  }, [customCharts, analysis?.fileHash]);
+
+  useEffect(() => {
+    if (!analysis) return;
+    try { localStorage.setItem(`sa_deal_${analysis.fileHash}`, JSON.stringify(dealInputs)); } catch {}
+  }, [dealInputs, analysis?.fileHash]);
+
+  function loadToolsFromStorage(fileHash: string) {
+    try {
+      const charts = localStorage.getItem(`sa_charts_${fileHash}`);
+      setCustomCharts(charts ? JSON.parse(charts) : []);
+      const deal = localStorage.getItem(`sa_deal_${fileHash}`);
+      setDealInputs(deal ? JSON.parse(deal) : DEFAULT_DEAL_INPUTS);
+    } catch {
+      setCustomCharts([]);
+      setDealInputs(DEFAULT_DEAL_INPUTS);
+    }
+  }
 
   const handleFileSelect = useCallback((file: File) => {
     selectedFileRef.current = file;
@@ -100,9 +124,9 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
     // Only reset tool state on a fresh analysis, not on force re-analyze
     if (!force) {
       setChatHistory([]);
-      setCustomCharts([]);
       setAnomalyExplanations({});
       setResolvedAnomalies(new Set());
+      // charts and dealInputs loaded from storage after we know the fileHash
     }
 
     try {
@@ -131,8 +155,12 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
         setChatHistory(result.chatHistory ?? []);
         setAnomalyExplanations({});
         setResolvedAnomalies(new Set());
+        loadToolsFromStorage(result.fileHash);
         return;
       }
+
+      // Load persisted tool state for this file (charts, deal inputs)
+      loadToolsFromStorage(result.fileHash);
 
       // Update history
       setHistory(prev => {
@@ -265,10 +293,10 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
       setSummaryText(result.summaryText ?? '');
       setChatHistory(result.chatHistory ?? []);
       setActiveTab('summary');
-      setCustomCharts([]);
       setAnomalyExplanations({});
       setResolvedAnomalies(new Set());
       setDuplicateNotice('');
+      loadToolsFromStorage(result.fileHash);
     } catch (err) {
       console.error('Failed to load history:', err);
     }
@@ -551,7 +579,13 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
                   onUnresolve={handleUnresolveAnomaly}
                 />
               )}
-              {activeTab === 'deal' && <DealDetailsTab analysis={analysis} />}
+              {activeTab === 'deal' && (
+                <DealDetailsTab
+                  analysis={analysis}
+                  inputs={dealInputs}
+                  onInputChange={(key, value) => setDealInputs(prev => ({ ...prev, [key]: value }))}
+                />
+              )}
               {activeTab === 'chat' && (
                 <ChatTab
                   analysis={analysis}

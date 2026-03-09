@@ -1,13 +1,8 @@
 'use client';
 
-import { useState } from 'react';
 import type { AnalysisResult } from '@/lib/models/statement';
 
-interface DealDetailsTabProps {
-  analysis: AnalysisResult;
-}
-
-interface DealInputs {
+export interface DealInputs {
   purchasePrice: string;
   marketValue: string;
   units: string;
@@ -15,6 +10,22 @@ interface DealInputs {
   loanBalance: string;
   interestRate: string;
   annualDebtService: string;
+}
+
+export const DEFAULT_DEAL_INPUTS: DealInputs = {
+  purchasePrice: '',
+  marketValue: '',
+  units: '',
+  sqFt: '',
+  loanBalance: '',
+  interestRate: '',
+  annualDebtService: '',
+};
+
+interface DealDetailsTabProps {
+  analysis: AnalysisResult;
+  inputs: DealInputs;
+  onInputChange: (key: keyof DealInputs, value: string) => void;
 }
 
 function safeNum(val: string): number | null {
@@ -71,23 +82,9 @@ const KEY_FIGURE_LABELS: Record<string, string> = {
   cash_flow: 'Cash Flow',
 };
 
-export default function DealDetailsTab({ analysis }: DealDetailsTabProps) {
+export default function DealDetailsTab({ analysis, inputs, onInputChange }: DealDetailsTabProps) {
   const { statement } = analysis;
   const noi = statement.keyFigures['noi']?.annualTotal ?? null;
-
-  const [inputs, setInputs] = useState<DealInputs>({
-    purchasePrice: '',
-    marketValue: '',
-    units: '',
-    sqFt: '',
-    loanBalance: '',
-    interestRate: '',
-    annualDebtService: '',
-  });
-
-  function update(key: keyof DealInputs, value: string) {
-    setInputs(prev => ({ ...prev, [key]: value }));
-  }
 
   const purchasePrice = safeNum(inputs.purchasePrice);
   const marketValue = safeNum(inputs.marketValue);
@@ -168,7 +165,7 @@ export default function DealDetailsTab({ analysis }: DealDetailsTabProps) {
               <input
                 type="text"
                 value={inputs[key]}
-                onChange={e => update(key, e.target.value)}
+                onChange={e => onInputChange(key, e.target.value)}
                 placeholder={placeholder}
                 className="input-field text-sm"
                 style={inputStyle}
