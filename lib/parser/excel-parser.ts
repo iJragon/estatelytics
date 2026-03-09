@@ -31,7 +31,7 @@ const KEY_FIGURE_PATTERNS: Record<string, string[]> = {
   utilities: ["utilities", "total utilities", "utility expenses"],
   real_estate_taxes: ["real estate taxes", "property taxes", "re taxes"],
   insurance: ["insurance", "property insurance"],
-  financial_expense: ["financial expense", "financial", "financing expense"],
+  financial_expense: ["total debt service", "debt service", "mortgage payment", "interest expense", "principal and interest", "loan payment", "financial expense", "financing expense", "total financial"],
   replacement_expense: ["replacement", "replacement reserve", "capital reserve"],
   total_non_operating: ["total non-operating", "non-operating", "below the line"],
   net_income: ["net income", "net income (loss)", "bottom line"],

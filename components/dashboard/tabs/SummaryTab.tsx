@@ -1,6 +1,8 @@
 'use client';
 
+import type React from 'react';
 import type { AnalysisResult } from '@/lib/models/statement';
+import Tooltip from '@/components/Tooltip';
 
 interface SummaryTabProps {
   analysis: AnalysisResult;
@@ -20,7 +22,7 @@ function formatPct(val: number | null | undefined): string {
 }
 
 interface KpiCardProps {
-  label: string;
+  label: React.ReactNode;
   value: string;
   subtitle?: string;
   color?: string;
@@ -91,31 +93,31 @@ export default function SummaryTab({ analysis, summaryText, summaryStreaming }: 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <KpiCard
-          label="Gross Revenue"
+          label={<Tooltip term="Gross Revenue">Gross Revenue</Tooltip>}
           value={formatDollar(totalRev)}
           subtitle="Annual"
           color="var(--accent)"
         />
         <KpiCard
-          label="Total Operating Expenses"
+          label={<Tooltip term="Total Operating Expenses">Total Operating Expenses</Tooltip>}
           value={formatDollar(totalOpEx !== null ? Math.abs(totalOpEx) : null)}
           subtitle={pctOfRev(totalOpEx)}
           color="var(--danger)"
         />
         <KpiCard
-          label="Net Operating Income"
+          label={<Tooltip term="Net Operating Income">Net Operating Income</Tooltip>}
           value={formatDollar(noi)}
           subtitle={pctOfRev(noi)}
           color={noi !== null && noi >= 0 ? 'var(--success)' : 'var(--danger)'}
         />
         <KpiCard
-          label="Net Income"
+          label={<Tooltip term="Net Income">Net Income</Tooltip>}
           value={formatDollar(netIncome)}
           subtitle={pctOfRev(netIncome)}
           color={netIncome !== null && netIncome >= 0 ? 'var(--success)' : 'var(--danger)'}
         />
         <KpiCard
-          label="Cash Flow"
+          label={<Tooltip term="Cash Flow">Cash Flow</Tooltip>}
           value={formatDollar(cashFlow)}
           subtitle={pctOfRev(cashFlow)}
           color={cashFlow !== null && cashFlow >= 0 ? 'var(--success)' : 'var(--danger)'}
@@ -132,19 +134,37 @@ export default function SummaryTab({ analysis, summaryText, summaryStreaming }: 
           </svg>
           <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>AI Executive Summary</h3>
           {summaryStreaming && (
-            <span className="text-xs" style={{ color: 'var(--muted)' }}>Generating...</span>
+            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--accent)' }}>
+              <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Generating…
+            </span>
           )}
         </div>
 
         {summaryText ? (
           <div className="space-y-1">
             {renderSummary(summaryText)}
+            {summaryStreaming && (
+              <span className="inline-block w-1.5 h-4 ml-0.5 align-middle rounded-sm animate-pulse" style={{ backgroundColor: 'var(--accent)' }} />
+            )}
           </div>
         ) : summaryStreaming ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-4 rounded animate-pulse" style={{ backgroundColor: 'var(--border)', width: `${85 - i * 10}%` }} />
-            ))}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--muted)' }}>
+              <svg className="animate-spin w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Analyzing financial data — this takes a few seconds…
+            </div>
+            <div className="space-y-2 mt-2">
+              {[90, 75, 60].map((w, i) => (
+                <div key={i} className="h-3.5 rounded animate-pulse" style={{ backgroundColor: 'var(--border)', width: `${w}%` }} />
+              ))}
+            </div>
           </div>
         ) : (
           <p className="text-sm" style={{ color: 'var(--muted)' }}>

@@ -54,7 +54,7 @@ export default function ExpensesTab({ analysis }: ExpensesTabProps) {
         </ChartCard>
       )}
 
-      <ChartCard title="Cash Flow vs Net Income" subtitle="Monthly comparison — divergence indicates balance sheet movements">
+      <ChartCard title="Monthly Net Income vs Cash Flow" subtitle="Monthly comparison — divergence indicates non-cash accounting items or balance sheet movements">
         <PlotlyChart data={chart4.data} layout={{ ...chart4.layout, title: undefined }} style={{ height: 300 }} />
       </ChartCard>
     </div>

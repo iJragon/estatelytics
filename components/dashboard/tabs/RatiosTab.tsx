@@ -3,6 +3,7 @@
 import type { AnalysisResult, RatioResult } from '@/lib/models/statement';
 import PlotlyChart from '@/components/charts/PlotlyChart';
 import { kpiGauge } from '@/components/charts/chart-builders';
+import Tooltip from '@/components/Tooltip';
 
 interface RatiosTabProps {
   analysis: AnalysisResult;
@@ -26,7 +27,7 @@ export default function RatiosTab({ analysis }: RatiosTabProps) {
     { r: ratios.oer,          lo: 35,   hi: 55,   label: 'Operating Expense Ratio' },
     { r: ratios.noiMargin,    lo: 40,   hi: 65,   label: 'NOI Margin' },
     { r: ratios.vacancyRate,  lo: 0,    hi: 7,    label: 'Vacancy Rate' },
-    { r: ratios.dscr,         lo: 1.25, hi: 9.99, label: 'DSCR' },
+    { r: ratios.dscr,         lo: 1.25, hi: 9.99, label: 'Debt Service Coverage Ratio' },
   ];
 
   const allRatios: RatioResult[] = [
@@ -65,7 +66,9 @@ export default function RatiosTab({ analysis }: RatiosTabProps) {
           <tbody>
             {allRatios.map(r => (
               <tr key={r.label} className="border-b" style={{ borderColor: 'var(--border)' }}>
-                <td className="py-2.5 font-medium" style={{ color: 'var(--text)' }}>{r.label}</td>
+                <td className="py-2.5 font-medium" style={{ color: 'var(--text)' }}>
+                  <Tooltip term={r.label}>{r.label}</Tooltip>
+                </td>
                 <td className="py-2.5 text-right font-mono text-sm" style={{ color: 'var(--text)' }}>{formatValue(r)}</td>
                 <td className="py-2.5 text-right text-sm" style={{ color: 'var(--muted)' }}>{r.benchmark}</td>
                 <td className="py-2.5 text-right"><StatusBadge status={r.status} /></td>

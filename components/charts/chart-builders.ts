@@ -56,20 +56,20 @@ export function revenueVsOpex(statement: FinancialStatement, _ratios: RatioRepor
       y: opex.map(v => (v !== null ? Math.abs(v) : null)),
       type: 'scatter',
       mode: 'lines+markers',
-      name: 'Total OpEx',
+      name: 'Operating Expenses',
       line: { color: COLORS.expense, width: LINE_WIDTH, shape: 'spline', smoothing: 0.4 },
       marker: { size: MARKER_SIZE, color: COLORS.expense },
-      hovertemplate: '<b>OpEx</b>: %{y:$,.0f}<extra></extra>',
+      hovertemplate: '<b>Operating Expenses</b>: %{y:$,.0f}<extra></extra>',
     },
     {
       x: months,
       y: noi,
       type: 'scatter',
       mode: 'lines+markers',
-      name: 'NOI',
+      name: 'Net Operating Income',
       line: { color: COLORS.noi, width: LINE_WIDTH, shape: 'spline', smoothing: 0.4 },
       marker: { size: MARKER_SIZE, color: COLORS.noi },
-      hovertemplate: '<b>NOI</b>: %{y:$,.0f}<extra></extra>',
+      hovertemplate: '<b>Net Operating Income</b>: %{y:$,.0f}<extra></extra>',
     },
   ];
 
@@ -85,24 +85,38 @@ export function revenueVsOpex(statement: FinancialStatement, _ratios: RatioRepor
 // 2. Expense breakdown donut
 export function expenseBreakdownDonut(statement: FinancialStatement) {
   const expenseKeys = [
-    { key: 'total_payroll',       label: 'Payroll',      color: COLORS.payroll },
-    { key: 'utilities',           label: 'Utilities',    color: COLORS.utilities },
-    { key: 'real_estate_taxes',   label: 'RE Taxes',     color: COLORS.taxes },
-    { key: 'insurance',           label: 'Insurance',    color: COLORS.insurance },
-    { key: 'management_fees',     label: 'Mgmt Fees',    color: COLORS.mgmt },
-    { key: 'replacement_expense', label: 'Replacement',  color: COLORS.other },
+    { key: 'total_payroll',       label: 'Payroll & Benefits',    color: COLORS.payroll },
+    { key: 'utilities',           label: 'Utilities',              color: COLORS.utilities },
+    { key: 'real_estate_taxes',   label: 'Real Estate Taxes',      color: COLORS.taxes },
+    { key: 'insurance',           label: 'Insurance',              color: COLORS.insurance },
+    { key: 'management_fees',     label: 'Management Fees',        color: COLORS.mgmt },
+    { key: 'replacement_expense', label: 'Replacement Reserve',    color: COLORS.other },
   ];
 
   const labels: string[] = [];
   const values: number[] = [];
   const colors: string[] = [];
+  let knownTotal = 0;
 
   for (const { key, label, color } of expenseKeys) {
     const row = statement.keyFigures[key];
     if (row && row.annualTotal !== null && Math.abs(row.annualTotal) > 0) {
       labels.push(label);
-      values.push(Math.abs(row.annualTotal));
+      const v = Math.abs(row.annualTotal);
+      values.push(v);
       colors.push(color);
+      knownTotal += v;
+    }
+  }
+
+  // Add "Other Expenses" slice for anything the parser couldn't categorize individually
+  const totalOpEx = statement.keyFigures['total_operating_expenses']?.annualTotal;
+  if (totalOpEx !== null && totalOpEx !== undefined) {
+    const other = Math.abs(totalOpEx) - knownTotal;
+    if (other > 1000) {
+      labels.push('Other Expenses');
+      values.push(other);
+      colors.push('#94a3b8');
     }
   }
 
@@ -245,21 +259,13 @@ export function noiMarginTrend(statement: FinancialStatement, ratios: RatioRepor
   return { data, layout };
 }
 
-// 6. Cash flow vs net income grouped bar
+// 6. Net Income vs Cash Flow grouped bar
 export function cashflowVsNetIncome(statement: FinancialStatement) {
   const months = statement.months;
-  const cashflow = getMonthlyValues(statement, 'cash_flow');
   const netIncome = getMonthlyValues(statement, 'net_income');
+  const cashflow = getMonthlyValues(statement, 'cash_flow');
 
   const data: Plotly.Data[] = [
-    {
-      x: months,
-      y: cashflow,
-      type: 'bar',
-      name: 'Cash Flow',
-      marker: { color: COLORS.cashflow, opacity: 0.85 },
-      hovertemplate: '<b>Cash Flow</b>: %{y:$,.0f}<extra></extra>',
-    },
     {
       x: months,
       y: netIncome,
@@ -268,10 +274,18 @@ export function cashflowVsNetIncome(statement: FinancialStatement) {
       marker: { color: COLORS.netincome, opacity: 0.85 },
       hovertemplate: '<b>Net Income</b>: %{y:$,.0f}<extra></extra>',
     },
+    {
+      x: months,
+      y: cashflow,
+      type: 'bar',
+      name: 'Cash Flow',
+      marker: { color: COLORS.cashflow, opacity: 0.85 },
+      hovertemplate: '<b>Cash Flow</b>: %{y:$,.0f}<extra></extra>',
+    },
   ];
 
   const layout: Partial<Plotly.Layout> = {
-    title: { text: 'Cash Flow vs Net Income' },
+    title: { text: 'Monthly Net Income vs Cash Flow' },
     barmode: 'group',
     yaxis: { tickformat: '$,.0f' },
     hovermode: 'x unified',
@@ -306,7 +320,7 @@ export function kpiGauge(label: string, value: number | null, lo: number, hi: nu
         valueformat: unit === 'x' ? '.2f' : '.1f',
         font: { size: 22 },
       },
-      title: { text: label, font: { size: 12 } },
+      // title omitted — shown above the gauge in the parent component to avoid duplication
       gauge: {
         axis: {
           range: [0, maxVal],
@@ -367,10 +381,11 @@ export function expenseHeatmap(statement: FinancialStatement) {
       y: expenseRows.map(r => r.label.length > 28 ? r.label.substring(0, 28) + '…' : r.label),
       z,
       colorscale: [
-        [0,   'rgba(59,130,246,0.05)'],
-        [0.3, 'rgba(245,158,11,0.4)'],
-        [0.7, 'rgba(249,115,22,0.7)'],
-        [1,   'rgba(239,68,68,0.9)'],
+        [0,   'rgba(34,197,94,0.1)'],
+        [0.3, 'rgba(34,197,94,0.45)'],
+        [0.55,'rgba(250,250,250,0.9)'],
+        [0.75,'rgba(239,68,68,0.5)'],
+        [1,   'rgba(239,68,68,0.95)'],
       ],
       showscale: true,
       hovertemplate: '<b>%{y}</b><br>%{x}: $%{z:,.0f}<extra></extra>',

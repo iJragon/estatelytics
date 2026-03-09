@@ -228,7 +228,7 @@ export function calculateRatios(statement: FinancialStatement): RatioReport {
     monthly: monthlyDivide(statement, 'noi', 'financial_expense', false, true, 1),
     status: statusForDscr(dscrVal),
     benchmark: '≥ 1.25x',
-    label: 'DSCR',
+    label: 'Debt Service Coverage Ratio',
     unit: 'x',
   };
 
