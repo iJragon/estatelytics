@@ -81,7 +81,7 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
     onDone?.();
   }
 
-  async function handleAnalyze() {
+  async function runAnalyze(force = false) {
     const file = selectedFileRef.current;
     if (!file) return;
 
@@ -96,7 +96,8 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch('/api/analyze', {
+      const url = force ? '/api/analyze?force=true' : '/api/analyze';
+      const res = await fetch(url, {
         method: 'POST',
         body: formData,
       });
@@ -145,6 +146,19 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
     } finally {
       setIsAnalyzing(false);
     }
+  }
+
+  const handleAnalyze = () => runAnalyze(false);
+  const handleForceAnalyze = () => runAnalyze(true);
+
+  async function handleHistoryDelete(id: string) {
+    await fetch(`/api/history?id=${id}`, { method: 'DELETE' });
+    setHistory(prev => prev.filter(h => h.id !== id));
+  }
+
+  async function handleClearHistory() {
+    await fetch('/api/history?all=true', { method: 'DELETE' });
+    setHistory([]);
   }
 
   async function handleHistorySelect(entry: HistoryEntry) {
@@ -249,8 +263,11 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
         history={history}
         onFileSelect={handleFileSelect}
         onAnalyze={handleAnalyze}
+        onForceAnalyze={handleForceAnalyze}
         isAnalyzing={isAnalyzing}
         onHistorySelect={handleHistorySelect}
+        onHistoryDelete={handleHistoryDelete}
+        onClearHistory={handleClearHistory}
         onSignOut={handleSignOut}
       />
 

@@ -17,6 +17,13 @@ export interface SheetStructure {
   accountColIndex?: number;
 }
 
+export interface ParserReportEntry {
+  key: string;
+  label: string | null;
+  rowNumber: number | null;
+  annualTotal: number | null;
+}
+
 export interface FinancialStatement {
   propertyName: string;
   period: string;
@@ -25,6 +32,7 @@ export interface FinancialStatement {
   allRows: LineItem[];
   keyFigures: Record<string, LineItem>; // semantic key -> LineItem
   structure: SheetStructure;
+  parserReport?: ParserReportEntry[]; // what the AI extractor found for each key figure
 }
 
 export const KEY_FIGURE_NAMES = [

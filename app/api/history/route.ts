@@ -41,16 +41,14 @@ export async function DELETE(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
+  const all = searchParams.get('all') === 'true';
 
-  if (!id) {
-    return NextResponse.json({ error: 'Missing id parameter' }, { status: 400 });
+  if (!id && !all) {
+    return NextResponse.json({ error: 'Missing id or all parameter' }, { status: 400 });
   }
 
-  const { error } = await supabase
-    .from('analyses')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', user.id);
+  const query = supabase.from('analyses').delete().eq('user_id', user.id);
+  const { error } = all ? await query : await query.eq('id', id!);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

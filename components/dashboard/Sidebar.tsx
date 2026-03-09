@@ -8,8 +8,11 @@ interface SidebarProps {
   history: HistoryEntry[];
   onFileSelect: (file: File) => void;
   onAnalyze: () => void;
+  onForceAnalyze: () => void;
   isAnalyzing: boolean;
   onHistorySelect: (entry: HistoryEntry) => void;
+  onHistoryDelete: (id: string) => void;
+  onClearHistory: () => void;
   onSignOut: () => void;
 }
 
@@ -26,8 +29,11 @@ export default function Sidebar({
   history,
   onFileSelect,
   onAnalyze,
+  onForceAnalyze,
   isAnalyzing,
   onHistorySelect,
+  onHistoryDelete,
+  onClearHistory,
   onSignOut,
 }: SidebarProps) {
   const [selectedFileName, setSelectedFileName] = useState('');
@@ -56,12 +62,7 @@ export default function Sidebar({
   return (
     <div
       className="flex flex-col h-full"
-      style={{
-        width: 280,
-        minWidth: 280,
-        backgroundColor: 'var(--surface)',
-        borderRight: '1px solid var(--border)',
-      }}
+      style={{ width: 280, minWidth: 280, backgroundColor: 'var(--surface)', borderRight: '1px solid var(--border)' }}
     >
       {/* Header */}
       <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -117,34 +118,72 @@ export default function Sidebar({
         >
           {isAnalyzing ? 'Analyzing...' : 'Analyze'}
         </button>
+
+        {/* Force re-analyze — bypasses cache, re-runs full AI extraction */}
+        {selectedFileName && !isAnalyzing && (
+          <button
+            onClick={onForceAnalyze}
+            className="w-full mt-1.5 text-xs py-1.5 px-3 rounded-md border transition-colors hover:opacity-80 flex items-center justify-center gap-1.5"
+            style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="23 4 23 10 17 10" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+            Force Re-analyze
+          </button>
+        )}
       </div>
 
-      {/* Separator */}
       <div className="border-t mx-4" style={{ borderColor: 'var(--border)' }} />
 
       {/* History */}
       <div className="flex-1 overflow-y-auto p-4">
-        <p className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-          History
-        </p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+            History
+          </p>
+          {history.length > 0 && (
+            <button
+              onClick={onClearHistory}
+              className="text-xs hover:opacity-80 transition-opacity"
+              style={{ color: 'var(--muted)' }}
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+
         {history.length === 0 ? (
           <p className="text-xs" style={{ color: 'var(--muted)' }}>No analyses yet</p>
         ) : (
           <div className="space-y-1">
             {history.map(entry => (
-              <button
-                key={entry.id}
-                onClick={() => onHistorySelect(entry)}
-                className="w-full text-left p-2 rounded-md transition-colors hover:opacity-80"
-                style={{ backgroundColor: 'var(--bg)' }}
-              >
-                <p className="text-xs font-medium truncate" style={{ color: 'var(--text)' }}>
-                  {entry.propertyName || entry.fileName}
-                </p>
-                <p className="text-xs truncate" style={{ color: 'var(--muted)' }}>
-                  {entry.period} &middot; {formatDate(entry.analyzedAt)}
-                </p>
-              </button>
+              <div key={entry.id} className="group flex items-start gap-1">
+                <button
+                  onClick={() => onHistorySelect(entry)}
+                  className="flex-1 text-left p-2 rounded-md transition-colors hover:opacity-80 min-w-0"
+                  style={{ backgroundColor: 'var(--bg)' }}
+                >
+                  <p className="text-xs font-medium truncate" style={{ color: 'var(--text)' }}>
+                    {entry.propertyName || entry.fileName}
+                  </p>
+                  <p className="text-xs truncate" style={{ color: 'var(--muted)' }}>
+                    {entry.period} &middot; {formatDate(entry.analyzedAt)}
+                  </p>
+                </button>
+                <button
+                  onClick={() => onHistoryDelete(entry.id)}
+                  className="flex-shrink-0 mt-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:opacity-80"
+                  style={{ color: 'var(--muted)' }}
+                  title="Delete"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -152,9 +191,7 @@ export default function Sidebar({
 
       {/* User / Sign out */}
       <div className="p-4 border-t" style={{ borderColor: 'var(--border)' }}>
-        <p className="text-xs truncate mb-2" style={{ color: 'var(--muted)' }}>
-          {userEmail}
-        </p>
+        <p className="text-xs truncate mb-2" style={{ color: 'var(--muted)' }}>{userEmail}</p>
         <button
           onClick={onSignOut}
           className="w-full text-xs py-1.5 px-3 rounded-md border transition-colors hover:opacity-80"

@@ -47,6 +47,30 @@ function statusForMetric(metric: string, value: number | null): 'good' | 'warnin
   }
 }
 
+const KEY_FIGURE_LABELS: Record<string, string> = {
+  gross_potential_rent: 'Gross Potential Rent',
+  vacancy_loss: 'Vacancy Loss',
+  concession_loss: 'Concession Loss',
+  bad_debt: 'Bad Debt',
+  net_rental_revenue: 'Net Rental Revenue',
+  other_tenant_charges: 'Other Tenant Charges',
+  total_revenue: 'Total Revenue',
+  controllable_expenses: 'Controllable Expenses',
+  non_controllable_expenses: 'Non-Controllable Expenses',
+  total_operating_expenses: 'Total Operating Expenses',
+  noi: 'Net Operating Income',
+  total_payroll: 'Total Payroll',
+  management_fees: 'Management Fees',
+  utilities: 'Utilities',
+  real_estate_taxes: 'Real Estate Taxes',
+  insurance: 'Insurance',
+  financial_expense: 'Financial Expense / Debt Service',
+  replacement_expense: 'Replacement Reserve',
+  total_non_operating: 'Total Non-Operating',
+  net_income: 'Net Income',
+  cash_flow: 'Cash Flow',
+};
+
 export default function DealDetailsTab({ analysis }: DealDetailsTabProps) {
   const { statement } = analysis;
   const noi = statement.keyFigures['noi']?.annualTotal ?? null;
@@ -176,6 +200,49 @@ export default function DealDetailsTab({ analysis }: DealDetailsTabProps) {
           );
         })}
       </div>
+      {/* AI Extraction Report — shows exactly what the AI identified for each key figure */}
+      {statement.parserReport && statement.parserReport.length > 0 && (
+        <div className="card">
+          <h3 className="font-semibold text-sm mb-1" style={{ color: 'var(--text)' }}>AI Data Extraction Report</h3>
+          <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
+            Shows which row the AI identified for each financial concept. "Not found" means that concept was absent from this statement.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
+                  <th className="text-left pb-2 font-medium" style={{ color: 'var(--muted)' }}>Concept</th>
+                  <th className="text-left pb-2 font-medium" style={{ color: 'var(--muted)' }}>Row Found In Statement</th>
+                  <th className="text-right pb-2 font-medium" style={{ color: 'var(--muted)' }}>Annual Total</th>
+                  <th className="text-right pb-2 font-medium" style={{ color: 'var(--muted)' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {statement.parserReport.map(entry => (
+                  <tr key={entry.key} className="border-b" style={{ borderColor: 'var(--border)' }}>
+                    <td className="py-1.5 font-medium" style={{ color: 'var(--text)' }}>
+                      {KEY_FIGURE_LABELS[entry.key] ?? entry.key}
+                    </td>
+                    <td className="py-1.5 font-mono" style={{ color: entry.label ? 'var(--text)' : 'var(--muted)' }}>
+                      {entry.label ? `Row ${entry.rowNumber}: "${entry.label}"` : '—'}
+                    </td>
+                    <td className="py-1.5 text-right font-mono" style={{ color: 'var(--text)' }}>
+                      {entry.annualTotal !== null
+                        ? `${entry.annualTotal < 0 ? '-' : ''}$${Math.abs(entry.annualTotal).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+                        : '—'}
+                    </td>
+                    <td className="py-1.5 text-right">
+                      {entry.label
+                        ? <span className="badge-good">found</span>
+                        : <span className="badge-unknown">not found</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

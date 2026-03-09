@@ -15,6 +15,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const force = request.nextUrl.searchParams.get('force') === 'true';
+
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -29,27 +31,29 @@ export async function POST(request: NextRequest) {
     // Compute MD5 hash
     const fileHash = crypto.createHash('md5').update(buffer).digest('hex');
 
-    // Check if analysis already exists
-    const { data: existing } = await supabase
-      .from('analyses')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('file_hash', fileHash)
-      .single();
+    // Return cached result unless force re-analysis was requested
+    if (!force) {
+      const { data: existing } = await supabase
+        .from('analyses')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('file_hash', fileHash)
+        .single();
 
-    if (existing) {
-      const result: AnalysisResult = {
-        statement: existing.statement_data,
-        ratios: existing.ratios_data,
-        anomalies: existing.anomalies_data,
-        trends: existing.trends_data,
-        summaryText: existing.summary_text,
-        chatHistory: existing.chat_history,
-        fileName: existing.file_name,
-        fileHash,
-        analyzedAt: existing.analyzed_at,
-      };
-      return NextResponse.json(result);
+      if (existing) {
+        const result: AnalysisResult = {
+          statement: existing.statement_data,
+          ratios: existing.ratios_data,
+          anomalies: existing.anomalies_data,
+          trends: existing.trends_data,
+          summaryText: existing.summary_text,
+          chatHistory: existing.chat_history,
+          fileName: existing.file_name,
+          fileHash,
+          analyzedAt: existing.analyzed_at,
+        };
+        return NextResponse.json(result);
+      }
     }
 
     // Parse and analyze

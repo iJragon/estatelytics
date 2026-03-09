@@ -1,5 +1,5 @@
 import Groq from 'groq-sdk';
-import type { LineItem } from '../models/statement';
+import type { LineItem, ParserReportEntry } from '../models/statement';
 
 // Use a more capable model for extraction — this is a one-time call per file,
 // not a streaming chat, so accuracy matters more than speed.
@@ -10,6 +10,7 @@ export async function extractKeyFiguresWithAI(
   headerText: string,
 ): Promise<{
   keyFigures: Record<string, LineItem>;
+  parserReport: ParserReportEntry[];
   propertyName: string;
   period: string;
   bookType: string;
@@ -17,7 +18,7 @@ export async function extractKeyFiguresWithAI(
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     console.warn('[ai-extractor] No GROQ_API_KEY — returning empty key figures');
-    return { keyFigures: {}, propertyName: 'Unknown Property', period: 'Unknown Period', bookType: 'Accrual' };
+    return { keyFigures: {}, parserReport: [], propertyName: 'Unknown Property', period: 'Unknown Period', bookType: 'Accrual' };
   }
 
   const client = new Groq({ apiKey });
@@ -142,22 +143,40 @@ Respond with ONLY a valid JSON object. No markdown fences, no explanation, no ex
 
     const rowMap = parsed.keyFigureRows ?? {};
     const keyFigures: Record<string, LineItem> = {};
+    const parserReport: ParserReportEntry[] = [];
 
-    for (const [key, rowNum] of Object.entries(rowMap)) {
+    // Build parserReport for all 21 expected keys, whether found or not
+    const ALL_KEYS = [
+      'gross_potential_rent', 'vacancy_loss', 'concession_loss', 'bad_debt',
+      'net_rental_revenue', 'other_tenant_charges', 'total_revenue',
+      'controllable_expenses', 'non_controllable_expenses', 'total_operating_expenses',
+      'noi', 'total_payroll', 'management_fees', 'utilities', 'real_estate_taxes',
+      'insurance', 'financial_expense', 'replacement_expense', 'total_non_operating',
+      'net_income', 'cash_flow',
+    ];
+
+    for (const key of ALL_KEYS) {
+      const rowNum = rowMap[key];
       if (typeof rowNum === 'number' && rowNum >= 1 && rowNum <= allRows.length) {
-        keyFigures[key] = allRows[rowNum - 1];
-        console.log(`[ai-extractor] ${key} → row ${rowNum}: "${allRows[rowNum - 1].label}" (total: ${allRows[rowNum - 1].annualTotal})`);
+        const row = allRows[rowNum - 1];
+        keyFigures[key] = row;
+        parserReport.push({ key, label: row.label, rowNumber: rowNum, annualTotal: row.annualTotal });
+        console.log(`[ai-extractor] ${key} → row ${rowNum}: "${row.label}" (total: ${row.annualTotal})`);
+      } else {
+        parserReport.push({ key, label: null, rowNumber: null, annualTotal: null });
+        console.log(`[ai-extractor] ${key} → not found`);
       }
     }
 
     return {
       keyFigures,
+      parserReport,
       propertyName: parsed.propertyName || 'Unknown Property',
       period: parsed.period || 'Unknown Period',
       bookType: parsed.bookType || 'Accrual',
     };
   } catch (err) {
     console.error('[ai-extractor] Extraction failed:', err);
-    return { keyFigures: {}, propertyName: 'Unknown Property', period: 'Unknown Period', bookType: 'Accrual' };
+    return { keyFigures: {}, parserReport: [], propertyName: 'Unknown Property', period: 'Unknown Period', bookType: 'Accrual' };
   }
 }

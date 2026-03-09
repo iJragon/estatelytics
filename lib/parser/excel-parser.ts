@@ -237,7 +237,7 @@ export async function parseExcel(data: Buffer | ArrayBuffer): Promise<FinancialS
   // ── 6. AI-based key figure extraction ─────────────────────────────────────
   // The AI receives the full numbered row list and identifies which row
   // corresponds to each financial concept, regardless of naming or layout.
-  const { keyFigures, propertyName, period, bookType } =
+  const { keyFigures, parserReport, propertyName, period, bookType } =
     await extractKeyFiguresWithAI(allRows, headerText);
 
   return {
@@ -247,6 +247,7 @@ export async function parseExcel(data: Buffer | ArrayBuffer): Promise<FinancialS
     months,
     allRows,
     keyFigures,
+    parserReport,
     structure: {
       headerRowIndex,
       monthColumns,

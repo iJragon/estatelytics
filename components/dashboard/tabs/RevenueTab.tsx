@@ -2,7 +2,7 @@
 
 import type { AnalysisResult } from '@/lib/models/statement';
 import PlotlyChart from '@/components/charts/PlotlyChart';
-import { revenueVsOpex, vacancyRateBar, noiMarginTrend, revenueWaterfall } from '@/components/charts/chart-builders';
+import { revenueVsOpex, vacancyRateBar, noiMarginTrend } from '@/components/charts/chart-builders';
 
 interface RevenueTabProps {
   analysis: AnalysisResult;
@@ -26,7 +26,6 @@ export default function RevenueTab({ analysis }: RevenueTabProps) {
   const chart1 = revenueVsOpex(statement, ratios);
   const chart2 = vacancyRateBar(statement, ratios);
   const chart3 = noiMarginTrend(statement, ratios);
-  const chart4 = revenueWaterfall(statement);
 
   return (
     <div className="space-y-5">
@@ -43,9 +42,6 @@ export default function RevenueTab({ analysis }: RevenueTabProps) {
         </ChartCard>
       </div>
 
-      <ChartCard title="Annual Revenue Waterfall" subtitle="How gross potential rent flows down to effective gross revenue">
-        <PlotlyChart data={chart4.data} layout={{ ...chart4.layout, title: undefined }} style={{ height: 320 }} />
-      </ChartCard>
     </div>
   );
 }
