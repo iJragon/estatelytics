@@ -15,7 +15,9 @@ interface CustomChart {
 interface CustomChartsTabProps {
   analysis: AnalysisResult;
   customCharts: CustomChart[];
-  onGenerate: (request: string) => Promise<void>;
+  onGenerate: (request: string) => Promise<string | undefined>;
+  onRemoveChart: (index: number) => void;
+  onClearCharts: () => void;
 }
 
 const CHART_SUGGESTIONS = [
@@ -26,7 +28,7 @@ const CHART_SUGGESTIONS = [
   'Vacancy loss vs concessions',
 ];
 
-export default function CustomChartsTab({ analysis, customCharts, onGenerate }: CustomChartsTabProps) {
+export default function CustomChartsTab({ analysis, customCharts, onGenerate, onRemoveChart, onClearCharts }: CustomChartsTabProps) {
   const [request, setRequest] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
@@ -37,8 +39,12 @@ export default function CustomChartsTab({ analysis, customCharts, onGenerate }: 
     setError('');
     setIsGenerating(true);
     try {
-      await onGenerate(q);
-      setRequest('');
+      const errMsg = await onGenerate(q);
+      if (errMsg) {
+        setError(errMsg);
+      } else {
+        setRequest('');
+      }
     } catch {
       setError('Failed to generate chart. Please try again.');
     } finally {
@@ -57,7 +63,7 @@ export default function CustomChartsTab({ analysis, customCharts, onGenerate }: 
             value={request}
             onChange={e => setRequest(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleGenerate(); }}
-            placeholder="Describe a chart (e.g., 'Monthly NOI vs budget')"
+            placeholder="Describe a chart (e.g. 'Monthly NOI vs budget')"
             disabled={isGenerating}
             className="flex-1 input-field text-sm"
           />
@@ -100,6 +106,15 @@ export default function CustomChartsTab({ analysis, customCharts, onGenerate }: 
         </div>
       ) : (
         <div className="space-y-6">
+          <div className="flex justify-end">
+            <button
+              onClick={onClearCharts}
+              className="text-xs px-2 py-1 rounded border transition-colors hover:opacity-70"
+              style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+            >
+              Clear all charts
+            </button>
+          </div>
           {customCharts.map((chart, i) => {
             let chartData: { data: Plotly.Data[]; layout: Partial<Plotly.Layout> };
             try {
@@ -107,7 +122,10 @@ export default function CustomChartsTab({ analysis, customCharts, onGenerate }: 
             } catch {
               return (
                 <div key={i} className="card">
-                  <p className="font-semibold text-sm mb-1" style={{ color: 'var(--text)' }}>{chart.title}</p>
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <p className="font-semibold text-sm" style={{ color: 'var(--text)' }}>{chart.title}</p>
+                    <button onClick={() => onRemoveChart(i)} className="text-xs hover:opacity-70" style={{ color: 'var(--muted)' }}>Remove</button>
+                  </div>
                   <p className="text-sm" style={{ color: 'var(--danger)' }}>Failed to render chart</p>
                 </div>
               );
@@ -115,6 +133,16 @@ export default function CustomChartsTab({ analysis, customCharts, onGenerate }: 
 
             return (
               <div key={i} className="card">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <p className="font-semibold text-sm" style={{ color: 'var(--text)' }}>{chart.title}</p>
+                  <button
+                    onClick={() => onRemoveChart(i)}
+                    className="text-xs px-2 py-1 rounded border transition-colors hover:opacity-70 shrink-0"
+                    style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+                  >
+                    Remove
+                  </button>
+                </div>
                 <PlotlyChart
                   data={chartData.data}
                   layout={{ title: { text: chart.title }, ...chartData.layout }}

@@ -45,7 +45,7 @@ export default function ExpensesTab({ analysis }: ExpensesTabProps) {
       </div>
 
       {chart3.data.length > 0 && (
-        <ChartCard title="Expense Heatmap" subtitle="Color shows deviation from each category's own monthly average — green is below average, red is above average">
+        <ChartCard title="Expense Heatmap" subtitle="Color shows deviation from each category's own monthly average. Green is below average, red is above average.">
           <PlotlyChart
             data={chart3.data}
             layout={{ ...chart3.layout, title: undefined }}
@@ -54,7 +54,7 @@ export default function ExpensesTab({ analysis }: ExpensesTabProps) {
         </ChartCard>
       )}
 
-      <ChartCard title="Monthly Net Income vs Cash Flow" subtitle="Monthly comparison — divergence indicates non-cash accounting items or balance sheet movements">
+      <ChartCard title="Monthly Net Income vs Cash Flow" subtitle="Monthly comparison. Large divergence indicates non-cash accounting items or balance sheet movements.">
         <PlotlyChart data={chart4.data} layout={{ ...chart4.layout, title: undefined }} style={{ height: 300 }} />
       </ChartCard>
     </div>

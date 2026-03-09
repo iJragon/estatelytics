@@ -6,7 +6,9 @@ import type { AnalysisResult, Anomaly } from '@/lib/models/statement';
 interface AnomaliesTabProps {
   analysis: AnalysisResult;
   anomalyExplanations: Record<number, string>;
+  resolvedAnomalies: Set<number>;
   onExplain: (index: number) => void;
+  onResolve: (index: number) => void;
 }
 
 type SeverityFilter = 'all' | 'high' | 'medium' | 'low';
@@ -21,8 +23,8 @@ const TYPE_LABELS: Record<string, string> = {
   missing_data: 'Missing Data',
   sign_change: 'Sign Change',
   outlier: 'Outlier',
-  cashflow_vs_netincome: 'CF vs NI',
-  negative_noi: 'Negative NOI',
+  cashflow_vs_netincome: 'Cash Flow vs Net Income',
+  negative_noi: 'Negative Net Operating Income',
   structural: 'Structural',
 };
 
@@ -30,30 +32,30 @@ function renderExplanation(text: string) {
   return <p className="text-sm leading-6" style={{ color: 'var(--text)' }}>{text}</p>;
 }
 
-export default function AnomaliesTab({ analysis, anomalyExplanations, onExplain }: AnomaliesTabProps) {
+export default function AnomaliesTab({ analysis, anomalyExplanations, resolvedAnomalies, onExplain, onResolve }: AnomaliesTabProps) {
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [explaining, setExplaining] = useState<Record<number, boolean>>({});
 
   const { anomalies } = analysis;
 
-  const filtered = severityFilter === 'all'
-    ? anomalies
-    : anomalies.filter(a => a.severity === severityFilter);
+  // Exclude resolved anomalies from all counts and display
+  const active = anomalies.filter((_, i) => !resolvedAnomalies.has(i));
+
+  const filtered = active.filter(a => severityFilter === 'all' || a.severity === severityFilter);
 
   const counts = {
-    all: anomalies.length,
-    high: anomalies.filter(a => a.severity === 'high').length,
-    medium: anomalies.filter(a => a.severity === 'medium').length,
-    low: anomalies.filter(a => a.severity === 'low').length,
+    all: active.length,
+    high: active.filter(a => a.severity === 'high').length,
+    medium: active.filter(a => a.severity === 'medium').length,
+    low: active.filter(a => a.severity === 'low').length,
   };
 
-  async function handleExplain(index: number) {
-    setExplaining(prev => ({ ...prev, [index]: true }));
-    await onExplain(index);
-    setExplaining(prev => ({ ...prev, [index]: false }));
+  async function handleExplain(origIdx: number) {
+    setExplaining(prev => ({ ...prev, [origIdx]: true }));
+    await onExplain(origIdx);
+    setExplaining(prev => ({ ...prev, [origIdx]: false }));
   }
 
-  // Find original index in the full anomaly array
   function getOriginalIndex(anomaly: Anomaly): number {
     return anomalies.indexOf(anomaly);
   }
@@ -61,7 +63,7 @@ export default function AnomaliesTab({ analysis, anomalyExplanations, onExplain 
   return (
     <div className="space-y-4">
       {/* Filter buttons */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         {(['all', 'high', 'medium', 'low'] as SeverityFilter[]).map(s => (
           <button
             key={s}
@@ -76,11 +78,18 @@ export default function AnomaliesTab({ analysis, anomalyExplanations, onExplain 
             {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)} ({counts[s]})
           </button>
         ))}
+        {resolvedAnomalies.size > 0 && (
+          <span className="text-xs self-center" style={{ color: 'var(--muted)' }}>
+            {resolvedAnomalies.size} resolved
+          </span>
+        )}
       </div>
 
       {filtered.length === 0 ? (
         <div className="card text-center py-8">
-          <p style={{ color: 'var(--muted)' }}>No {severityFilter !== 'all' ? severityFilter + ' severity ' : ''}anomalies detected.</p>
+          <p style={{ color: 'var(--muted)' }}>
+            No {severityFilter !== 'all' ? severityFilter + ' severity ' : ''}anomalies detected.
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -119,25 +128,31 @@ export default function AnomaliesTab({ analysis, anomalyExplanations, onExplain 
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleExplain(origIdx)}
-                    disabled={isExplaining}
-                    className="shrink-0 px-3 py-1.5 text-xs rounded-md border transition-colors"
-                    style={{
-                      borderColor: 'var(--accent)',
-                      color: 'var(--accent)',
-                      opacity: isExplaining ? 0.6 : 1,
-                    }}
-                  >
-                    {isExplaining ? 'Explaining...' : 'Explain with AI'}
-                  </button>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <button
+                      onClick={() => handleExplain(origIdx)}
+                      disabled={isExplaining}
+                      className="px-3 py-1.5 text-xs rounded-md border transition-colors"
+                      style={{
+                        borderColor: 'var(--accent)',
+                        color: 'var(--accent)',
+                        opacity: isExplaining ? 0.6 : 1,
+                      }}
+                    >
+                      {isExplaining ? 'Explaining...' : 'Explain'}
+                    </button>
+                    <button
+                      onClick={() => onResolve(origIdx)}
+                      className="px-3 py-1.5 text-xs rounded-md border transition-colors hover:opacity-70"
+                      style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+                    >
+                      Resolve
+                    </button>
+                  </div>
                 </div>
 
                 {explanation !== undefined && (
-                  <div
-                    className="mt-3 pt-3 border-t"
-                    style={{ borderColor: 'var(--border)' }}
-                  >
+                  <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
                     <p className="text-xs font-semibold mb-1" style={{ color: 'var(--accent)' }}>AI Explanation</p>
                     {explanation ? renderExplanation(explanation) : (
                       <div className="flex gap-1">

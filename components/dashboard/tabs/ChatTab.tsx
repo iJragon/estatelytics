@@ -9,6 +9,7 @@ interface ChatTabProps {
   chatHistory: ChatMessage[];
   isChatStreaming: boolean;
   onSend: (question: string) => void;
+  onClearChat: () => void;
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -42,7 +43,7 @@ function renderMessage(content: string) {
   });
 }
 
-export default function ChatTab({ analysis, chatHistory, isChatStreaming, onSend }: ChatTabProps) {
+export default function ChatTab({ analysis, chatHistory, isChatStreaming, onSend, onClearChat }: ChatTabProps) {
   const [input, setInput] = useState('');
   const [suggestions] = useState(() => {
     // Pick 6 random suggestions
@@ -76,6 +77,19 @@ export default function ChatTab({ analysis, chatHistory, isChatStreaming, onSend
 
   return (
     <div className="flex flex-col h-full" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+      {/* Header row with clear button */}
+      {chatHistory.length > 0 && (
+        <div className="flex justify-end mb-2">
+          <button
+            onClick={onClearChat}
+            disabled={isChatStreaming}
+            className="text-xs px-2 py-1 rounded border transition-colors hover:opacity-70"
+            style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+          >
+            Clear chat
+          </button>
+        </div>
+      )}
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 pb-4">
         {chatHistory.length === 0 ? (

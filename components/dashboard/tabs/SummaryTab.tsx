@@ -158,7 +158,7 @@ export default function SummaryTab({ analysis, summaryText, summaryStreaming }: 
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              Analyzing financial data — this takes a few seconds…
+              Analyzing financial data, this takes a few seconds...
             </div>
             <div className="space-y-2 mt-2">
               {[90, 75, 60].map((w, i) => (

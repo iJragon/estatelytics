@@ -132,12 +132,12 @@ export default function DealDetailsTab({ analysis }: DealDetailsTabProps) {
   const metrics = [
     { key: 'capRate', label: 'Cap Rate', value: capRate, display: fmt(capRate, '', '%') },
     { key: 'coc', label: 'Cash-on-Cash', value: coc, display: fmt(coc, '', '%') },
-    { key: 'grm', label: 'GRM', value: grm, display: fmt(grm, '', 'x') },
-    { key: 'ltv', label: 'LTV', value: ltv, display: fmt(ltv, '', '%') },
-    { key: 'dscr', label: 'DSCR', value: dscr, display: fmt(dscr, '', 'x') },
+    { key: 'grm', label: 'Gross Rent Multiplier', value: grm, display: fmt(grm, '', 'x') },
+    { key: 'ltv', label: 'Loan-to-Value Ratio', value: ltv, display: fmt(ltv, '', '%') },
+    { key: 'dscr', label: 'Debt Service Coverage Ratio', value: dscr, display: fmt(dscr, '', 'x') },
     { key: 'debtYield', label: 'Debt Yield', value: debtYield, display: fmt(debtYield, '', '%') },
-    { key: 'noiPerUnit', label: 'NOI / Unit', value: noiPerUnit, display: fmtDollar(noiPerUnit) },
-    { key: 'pricePerUnit', label: 'Price / Unit', value: pricePerUnit, display: fmtDollar(pricePerUnit) },
+    { key: 'noiPerUnit', label: 'Net Operating Income per Unit', value: noiPerUnit, display: fmtDollar(noiPerUnit) },
+    { key: 'pricePerUnit', label: 'Price per Unit', value: pricePerUnit, display: fmtDollar(pricePerUnit) },
   ];
 
   const inputStyle = {
@@ -156,7 +156,7 @@ export default function DealDetailsTab({ analysis }: DealDetailsTabProps) {
             { key: 'purchasePrice' as const, label: 'Purchase Price ($)', placeholder: '5,000,000' },
             { key: 'marketValue' as const, label: 'Market Value ($)', placeholder: '5,200,000' },
             { key: 'units' as const, label: 'Units', placeholder: '100' },
-            { key: 'sqFt' as const, label: 'Sq Ft', placeholder: '80,000' },
+            { key: 'sqFt' as const, label: 'Square Footage', placeholder: '80,000' },
             { key: 'loanBalance' as const, label: 'Loan Balance ($)', placeholder: '3,500,000' },
             { key: 'interestRate' as const, label: 'Interest Rate (%)', placeholder: '5.5' },
             { key: 'annualDebtService' as const, label: 'Annual Debt Service ($)', placeholder: '250,000' },
@@ -224,12 +224,12 @@ export default function DealDetailsTab({ analysis }: DealDetailsTabProps) {
                       {KEY_FIGURE_LABELS[entry.key] ?? entry.key}
                     </td>
                     <td className="py-1.5 font-mono" style={{ color: entry.label ? 'var(--text)' : 'var(--muted)' }}>
-                      {entry.label ? `Row ${entry.rowNumber}: "${entry.label}"` : '—'}
+                      {entry.label ? `Row ${entry.rowNumber}: "${entry.label}"` : '-'}
                     </td>
                     <td className="py-1.5 text-right font-mono" style={{ color: 'var(--text)' }}>
                       {entry.annualTotal !== null
                         ? `${entry.annualTotal < 0 ? '-' : ''}$${Math.abs(entry.annualTotal).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-                        : '—'}
+                        : '-'}
                     </td>
                     <td className="py-1.5 text-right">
                       {entry.label

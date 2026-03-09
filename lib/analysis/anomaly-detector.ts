@@ -55,7 +55,7 @@ export function detectAnomalies(statement: FinancialStatement): Anomaly[] {
         severity: isCritical ? 'high' : 'medium',
         label: row.label,
         cellRef: cellRef(structure.labelColIndex, row.rowNumber),
-        description: `Key figure "${row.label}" has no monthly values — this metric could not be read from the statement.`,
+        description: `Key figure "${row.label}" has no monthly values. This metric could not be read from the statement.`,
         detected: 'All months are empty',
         expected: 'Complete monthly data for this key figure',
         category: 'Data Quality',
@@ -112,36 +112,42 @@ export function detectAnomalies(statement: FinancialStatement): Anomaly[] {
     }
   }
 
-  // ── 3. Statistical outliers — non-header, non-subtotal, key figure rows ─
+  // ── 3. Statistical outliers — aggregate per-row (one anomaly per key figure) ─
   for (const row of Object.values(keyFigures)) {
     if (row.isHeader || row.isSubtotal) continue;
     const vals = months.map(m => row.montlyValues[m]).filter((v): v is number => v !== null);
-    if (vals.length < 6) continue; // need enough months for meaningful statistics
+    if (vals.length < 6) continue;
 
     const avg = mean(vals);
     const std = stdDev(vals, avg);
-    if (std < 500) continue; // ignore rows with negligible variance
+    if (std < 500) continue;
 
+    const outlierMonths: Array<{ month: string; val: number; zScore: number }> = [];
     for (const month of months) {
       const val = row.montlyValues[month];
       if (val === null) continue;
       const zScore = Math.abs((val - avg) / std);
-      const absDeviation = Math.abs(val - avg);
-
-      if (zScore > 3.0 && absDeviation > 1000) {
-        const monthColIndex = structure.monthColumns.find(mc => mc.label === month)?.colIndex ?? structure.labelColIndex;
-        const severity = zScore > 4.5 ? 'high' : 'medium';
-        anomalies.push({
-          type: 'outlier',
-          severity,
-          label: row.label,
-          cellRef: cellRef(monthColIndex, row.rowNumber),
-          description: `"${row.label}" has an unusually ${val > avg ? 'high' : 'low'} value in ${month}: $${val.toLocaleString('en-US', { maximumFractionDigits: 0 })} vs. typical $${avg.toLocaleString('en-US', { maximumFractionDigits: 0 })} (z-score: ${zScore.toFixed(1)})`,
-          detected: `$${val.toLocaleString('en-US', { maximumFractionDigits: 0 })} (z=${zScore.toFixed(1)})`,
-          expected: `Near $${avg.toLocaleString('en-US', { maximumFractionDigits: 0 })} ± $${std.toLocaleString('en-US', { maximumFractionDigits: 0 })}`,
-          category: 'Statistical Outlier',
-        });
+      if (zScore > 3.0 && Math.abs(val - avg) > 1000) {
+        outlierMonths.push({ month, val, zScore });
       }
+    }
+
+    if (outlierMonths.length > 0) {
+      const maxZ = Math.max(...outlierMonths.map(o => o.zScore));
+      const severity = maxZ > 4.5 ? 'high' : 'medium';
+      const monthDescriptions = outlierMonths
+        .map(o => `${o.month} ($${o.val.toLocaleString('en-US', { maximumFractionDigits: 0 })}, z=${o.zScore.toFixed(1)})`)
+        .join(', ');
+      anomalies.push({
+        type: 'outlier',
+        severity,
+        label: row.label,
+        cellRef: cellRef(structure.labelColIndex, row.rowNumber),
+        description: `"${row.label}" has statistically unusual values in: ${monthDescriptions}. Typical monthly value is $${avg.toLocaleString('en-US', { maximumFractionDigits: 0 })}.`,
+        detected: `${outlierMonths.length} outlier month(s), max z=${maxZ.toFixed(1)}`,
+        expected: `Near $${avg.toLocaleString('en-US', { maximumFractionDigits: 0 })} per month`,
+        category: 'Statistical Outlier',
+      });
     }
   }
 
@@ -177,7 +183,7 @@ export function detectAnomalies(statement: FinancialStatement): Anomaly[] {
       severity: 'high',
       label: 'Negative Annual Net Operating Income',
       cellRef: cellRef(structure.labelColIndex, noiRow.rowNumber),
-      description: `Annual NOI is negative: $${noiRow.annualTotal.toLocaleString('en-US', { maximumFractionDigits: 0 })}. The property's operating expenses exceed its revenue — the property is running at an operating loss.`,
+      description: `Annual NOI is negative: $${noiRow.annualTotal.toLocaleString('en-US', { maximumFractionDigits: 0 })}. The property's operating expenses exceed its revenue; the property is running at an operating loss.`,
       detected: `NOI: $${noiRow.annualTotal.toLocaleString('en-US', { maximumFractionDigits: 0 })}`,
       expected: 'NOI should be positive for a viable investment property',
       category: 'Critical Performance',
@@ -203,9 +209,21 @@ export function detectAnomalies(statement: FinancialStatement): Anomaly[] {
     }
   }
 
-  // Sort: high → medium → low
+  // Deduplicate: for each (label, type) pair keep only the highest-severity entry
+  const seen = new Map<string, number>(); // key -> index in deduped array
+  const deduped: Anomaly[] = [];
   const severityOrder = { high: 0, medium: 1, low: 2 };
-  anomalies.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+  for (const anomaly of anomalies) {
+    const key = `${anomaly.label}::${anomaly.type}`;
+    const existingIdx = seen.get(key);
+    if (existingIdx === undefined) {
+      seen.set(key, deduped.length);
+      deduped.push(anomaly);
+    } else if (severityOrder[anomaly.severity] < severityOrder[deduped[existingIdx].severity]) {
+      deduped[existingIdx] = anomaly; // replace with higher severity
+    }
+  }
 
-  return anomalies;
+  deduped.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+  return deduped;
 }

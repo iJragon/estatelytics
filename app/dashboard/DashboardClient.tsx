@@ -40,13 +40,12 @@ const TOOL_TABS = [
   { id: 'charts', label: 'Charts' },
 ];
 
-const TABS = [...ANALYSIS_TABS, ...TOOL_TABS];
-
 export default function DashboardClient({ userEmail, initialHistory }: DashboardClientProps) {
   const router = useRouter();
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState('');
+  const [duplicateNotice, setDuplicateNotice] = useState('');
   const [summaryText, setSummaryText] = useState('');
   const [summaryStreaming, setSummaryStreaming] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
@@ -55,11 +54,14 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
   const [history, setHistory] = useState<HistoryEntry[]>(initialHistory);
   const [customCharts, setCustomCharts] = useState<Array<{ spec: ChartSpec; explanation: string; title: string }>>([]);
   const [anomalyExplanations, setAnomalyExplanations] = useState<Record<number, string>>({});
+  const [resolvedAnomalies, setResolvedAnomalies] = useState<Set<number>>(new Set());
+  const [showForceConfirm, setShowForceConfirm] = useState(false);
   const selectedFileRef = useRef<File | null>(null);
 
   const handleFileSelect = useCallback((file: File) => {
     selectedFileRef.current = file;
     setAnalyzeError('');
+    setDuplicateNotice('');
   }, []);
 
   async function streamText(
@@ -92,10 +94,16 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
 
     setIsAnalyzing(true);
     setAnalyzeError('');
+    setDuplicateNotice('');
     setSummaryText('');
-    setChatHistory([]);
-    setCustomCharts([]);
-    setAnomalyExplanations({});
+
+    // Only reset tool state on a fresh analysis, not on force re-analyze
+    if (!force) {
+      setChatHistory([]);
+      setCustomCharts([]);
+      setAnomalyExplanations({});
+      setResolvedAnomalies(new Set());
+    }
 
     try {
       const formData = new FormData();
@@ -115,6 +123,28 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
       const result: AnalysisResult = await res.json();
       setAnalysis(result);
       setActiveTab('summary');
+
+      if (result.fromCache && !force) {
+        // Duplicate file: load stored state, skip streaming
+        setDuplicateNotice(`This file was already analyzed. Loaded from history.`);
+        setSummaryText(result.summaryText ?? '');
+        setChatHistory(result.chatHistory ?? []);
+        setAnomalyExplanations({});
+        setResolvedAnomalies(new Set());
+        setHistory(prev => {
+          const existing = prev.find(h => h.id === result.fileHash);
+          if (existing) return prev;
+          const newEntry: HistoryEntry = {
+            id: result.fileHash,
+            fileName: result.fileName,
+            propertyName: result.statement.propertyName,
+            period: result.statement.period,
+            analyzedAt: result.analyzedAt,
+          };
+          return [newEntry, ...prev].slice(0, 20);
+        });
+        return;
+      }
 
       // Update history
       setHistory(prev => {
@@ -154,7 +184,15 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
   }
 
   const handleAnalyze = () => runAnalyze(false);
-  const handleForceAnalyze = () => runAnalyze(true);
+
+  function handleForceAnalyze() {
+    setShowForceConfirm(true);
+  }
+
+  function confirmForceAnalyze() {
+    setShowForceConfirm(false);
+    runAnalyze(true);
+  }
 
   async function handleHistoryDelete(id: string) {
     await fetch(`/api/history?id=${id}`, { method: 'DELETE' });
@@ -177,6 +215,8 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
       setActiveTab('summary');
       setCustomCharts([]);
       setAnomalyExplanations({});
+      setResolvedAnomalies(new Set());
+      setDuplicateNotice('');
     } catch (err) {
       console.error('Failed to load history:', err);
     }
@@ -211,6 +251,10 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
     }
   }
 
+  function handleClearChat() {
+    setChatHistory([]);
+  }
+
   async function handleExplainAnomaly(index: number) {
     if (!analysis) return;
     const anomaly = analysis.anomalies[index];
@@ -229,28 +273,40 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
           setAnomalyExplanations(prev => ({ ...prev, [index]: acc }));
         },
       );
-    } catch (err) {
+    } catch {
       setAnomalyExplanations(prev => ({ ...prev, [index]: 'Failed to generate explanation.' }));
     }
   }
 
-  async function handleGenerateChart(request: string) {
+  function handleResolveAnomaly(index: number) {
+    setResolvedAnomalies(prev => new Set([...prev, index]));
+  }
+
+  async function handleGenerateChart(request: string): Promise<string | undefined> {
     if (!analysis) return;
     const res = await fetch('/api/charts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ request, statement: analysis.statement }),
     });
-    if (!res.ok) return;
+    if (!res.ok) return 'Failed to reach the chart generation service.';
     const result = await res.json();
     if ('error' in result) {
-      console.error(result.error);
-      return;
+      return result.error as string;
     }
     setCustomCharts(prev => [
       { spec: result.spec, explanation: result.explanation, title: result.spec.title },
       ...prev,
     ]);
+    return undefined;
+  }
+
+  function handleRemoveChart(index: number) {
+    setCustomCharts(prev => prev.filter((_, i) => i !== index));
+  }
+
+  function handleClearCharts() {
+    setCustomCharts([]);
   }
 
   async function handleSignOut() {
@@ -318,30 +374,30 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
                 }}
               >
                 {tab.label}
-                {tab.id === 'anomalies' && analysis.anomalies.filter(a => a.severity === 'high').length > 0 && (
+                {tab.id === 'anomalies' && analysis.anomalies.filter((a, i) => a.severity === 'high' && !resolvedAnomalies.has(i)).length > 0 && (
                   <span
                     className="ml-1 px-1.5 py-0.5 text-xs rounded-full"
                     style={{ backgroundColor: 'var(--danger)', color: 'white' }}
                   >
-                    {analysis.anomalies.filter(a => a.severity === 'high').length}
+                    {analysis.anomalies.filter((a, i) => a.severity === 'high' && !resolvedAnomalies.has(i)).length}
                   </span>
                 )}
               </button>
             ))}
 
-            {/* Separator between analysis and interactive tools */}
-            <div
-              className="flex items-center px-2 self-stretch"
-              style={{ borderLeft: '1px solid var(--border)', margin: '6px 4px' }}
-            />
+            {/* Spacer pushes Tools to the right */}
+            <div className="flex-1" />
+
+            {/* Separator */}
+            <div className="flex items-center" style={{ borderLeft: '1px solid var(--border)', margin: '6px 0' }} />
             <span
-              className="self-center px-2 text-xs font-semibold uppercase tracking-wider whitespace-nowrap"
+              className="self-center px-3 text-xs font-semibold uppercase tracking-wider whitespace-nowrap"
               style={{ color: 'var(--muted)', opacity: 0.5 }}
             >
               Tools
             </span>
 
-            {/* Interactive tool tabs */}
+            {/* Tool tabs */}
             {TOOL_TABS.map(tab => (
               <button
                 key={tab.id}
@@ -363,6 +419,13 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
           {analyzeError && (
             <div className="mb-4 p-3 rounded-md text-sm" style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}>
               {analyzeError}
+            </div>
+          )}
+
+          {duplicateNotice && (
+            <div className="mb-4 p-3 rounded-md text-sm flex items-center gap-2" style={{ backgroundColor: 'rgba(59,130,246,0.08)', color: 'var(--accent)', border: '1px solid rgba(59,130,246,0.2)' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              {duplicateNotice} Use Force Re-analyze in the sidebar to re-run the AI extraction.
             </div>
           )}
 
@@ -414,7 +477,9 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
                 <AnomaliesTab
                   analysis={analysis}
                   anomalyExplanations={anomalyExplanations}
+                  resolvedAnomalies={resolvedAnomalies}
                   onExplain={handleExplainAnomaly}
+                  onResolve={handleResolveAnomaly}
                 />
               )}
               {activeTab === 'deal' && <DealDetailsTab analysis={analysis} />}
@@ -424,6 +489,7 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
                   chatHistory={chatHistory}
                   isChatStreaming={isChatStreaming}
                   onSend={handleSendChat}
+                  onClearChat={handleClearChat}
                 />
               )}
               {activeTab === 'charts' && (
@@ -431,12 +497,50 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
                   analysis={analysis}
                   customCharts={customCharts}
                   onGenerate={handleGenerateChart}
+                  onRemoveChart={handleRemoveChart}
+                  onClearCharts={handleClearCharts}
                 />
               )}
             </>
           )}
         </div>
       </div>
+
+      {/* Force Re-analyze confirmation modal */}
+      {showForceConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl" style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Re-run AI Analysis?</h3>
+            </div>
+            <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>
+              This will re-run the AI extraction and analysis on this file, bypassing the cached result.
+              Your current chat messages, custom charts, and deal detail inputs will be preserved.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowForceConfirm(false)}
+                className="px-4 py-2 text-sm rounded-md border transition-colors hover:opacity-80"
+                style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmForceAnalyze}
+                className="px-4 py-2 text-sm rounded-md transition-colors hover:opacity-80"
+                style={{ backgroundColor: '#f59e0b', color: 'white' }}
+              >
+                Re-analyze
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

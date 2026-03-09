@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
           fileName: existing.file_name,
           fileHash,
           analyzedAt: existing.analyzed_at,
+          fromCache: true,
         };
         return NextResponse.json(result);
       }

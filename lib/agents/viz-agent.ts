@@ -39,7 +39,12 @@ export class VizAgent {
       .slice(0, 50);
 
     const systemPrompt = `You are a data visualization expert for financial P&L analysis.
-Return ONLY valid JSON (no markdown, no explanation outside JSON) matching this exact schema:
+Return ONLY valid JSON (no markdown, no explanation outside JSON).
+
+If the request is nonsensical, unrelated to financial analysis, or cannot be fulfilled with the available data, return:
+{ "error": "Brief honest explanation of why the chart cannot be created" }
+
+Otherwise return this schema:
 {
   "spec": {
     "title": "Chart title",
@@ -60,7 +65,8 @@ Rules:
 - dataRef must exactly match one of the available key figures or row labels
 - For pie charts, traces represent slices; dataRef should be annual totals
 - For line/bar/area, each trace is a series plotted over months
-- yaxisFormat: "$" for dollar amounts, "%" for percentages, "x" for ratios, "" for counts`;
+- yaxisFormat: "$" for dollar amounts, "%" for percentages, "x" for ratios, "" for counts
+- Decline clearly if the request has no meaningful interpretation as a financial chart`;
 
     const userMessage = `Create a chart for this request: "${request}"
 Property: ${statement.propertyName}, Period: ${statement.period}`;

@@ -108,4 +108,5 @@ export interface AnalysisResult {
   fileName: string;
   fileHash: string;
   analyzedAt: string;
+  fromCache?: boolean;
 }
