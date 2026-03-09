@@ -17,7 +17,7 @@ const ACCOUNT_CODE_REGEX = /^\d{3,5}-\d{3,5}$/;
 const KEY_FIGURE_PATTERNS: Record<string, string[]> = {
   total_revenue: ["total revenue", "effective gross income", "total income"],
   gross_potential_rent: ["gross potential rent", "gross potential", "potential rental revenue", "scheduled rent"],
-  vacancy_loss: ["vacancy loss", "vacancy", "physical vacancy", "economic vacancy"],
+  vacancy_loss: ["loss due to vacancies", "vacancy apartments", "vacancy loss", "physical vacancy loss", "economic vacancy loss", "physical vacancy", "economic vacancy", "vacancy"],
   concession_loss: ["concession", "concessions", "rent concession"],
   bad_debt: ["bad debt", "bad debts", "uncollectible"],
   net_rental_revenue: ["net rental revenue", "net rent", "net rental income"],
@@ -36,6 +36,12 @@ const KEY_FIGURE_PATTERNS: Record<string, string[]> = {
   total_non_operating: ["total non-operating", "non-operating", "below the line"],
   net_income: ["net income", "net income (loss)", "bottom line"],
   cash_flow: ["cash flow", "net cash flow", "cash flow from operations"],
+};
+
+// For these key figures, the row label must contain the given substring (case-insensitive, normalized).
+// Prevents broad word-overlap matches from winning (e.g. "TOTAL LOSS" matching vacancy_loss via the word "loss").
+const KEY_FIGURE_REQUIRED_SUBSTRING: Partial<Record<string, string>> = {
+  vacancy_loss: 'vacanc',
 };
 
 function normalizeLabel(label: string): string {
@@ -68,9 +74,10 @@ function scoreRowForKeyFigure(row: LineItem, patterns: string[]): number {
   if (maxScore === 0) return 0;
 
   let score = maxScore;
-  // Has non-null values
+  // Has non-null values in month columns
   const hasValues = Object.values(row.montlyValues).some(v => v !== null);
   if (hasValues) score += 20;
+  else score -= 40; // heavy penalty for header/section rows with no data — prevents section headers beating data subtotals
   if (row.isSubtotal) score += 15;
   score += 10; // any match bonus
   return score;
@@ -308,9 +315,12 @@ export async function parseExcel(data: Buffer | ArrayBuffer): Promise<FinancialS
   // Extract key figures via fuzzy matching
   const keyFigures: Record<string, LineItem> = {};
   for (const [keyName, patterns] of Object.entries(KEY_FIGURE_PATTERNS)) {
+    const requiredSubstring = KEY_FIGURE_REQUIRED_SUBSTRING[keyName];
     let bestScore = 0;
     let bestRow: LineItem | null = null;
     for (const row of allRows) {
+      // Skip rows that don't contain the required substring (prevents false-positive word-overlap matches)
+      if (requiredSubstring && !normalizeLabel(row.label).includes(requiredSubstring)) continue;
       const score = scoreRowForKeyFigure(row, patterns);
       if (score > bestScore) {
         bestScore = score;

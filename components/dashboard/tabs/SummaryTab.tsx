@@ -10,10 +10,8 @@ interface SummaryTabProps {
 
 function formatDollar(val: number | null | undefined): string {
   if (val === null || val === undefined) return 'N/A';
-  const abs = Math.abs(val);
-  if (abs >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `$${(val / 1_000).toFixed(1)}K`;
-  return `$${val.toFixed(0)}`;
+  const sign = val < 0 ? '-' : '';
+  return `${sign}$${Math.abs(val).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
 function formatPct(val: number | null | undefined): string {
@@ -57,7 +55,7 @@ function renderSummary(text: string) {
 }
 
 export default function SummaryTab({ analysis, summaryText, summaryStreaming }: SummaryTabProps) {
-  const { statement, ratios, anomalies } = analysis;
+  const { statement, anomalies } = analysis;
   const kf = statement.keyFigures;
 
   const totalRev = kf['total_revenue']?.annualTotal ?? null;
@@ -99,13 +97,13 @@ export default function SummaryTab({ analysis, summaryText, summaryStreaming }: 
           color="var(--accent)"
         />
         <KpiCard
-          label="Total OpEx"
+          label="Total Operating Expenses"
           value={formatDollar(totalOpEx !== null ? Math.abs(totalOpEx) : null)}
           subtitle={pctOfRev(totalOpEx)}
           color="var(--danger)"
         />
         <KpiCard
-          label="NOI"
+          label="Net Operating Income"
           value={formatDollar(noi)}
           subtitle={pctOfRev(noi)}
           color={noi !== null && noi >= 0 ? 'var(--success)' : 'var(--danger)'}
@@ -122,30 +120,6 @@ export default function SummaryTab({ analysis, summaryText, summaryStreaming }: 
           subtitle={pctOfRev(cashFlow)}
           color={cashFlow !== null && cashFlow >= 0 ? 'var(--success)' : 'var(--danger)'}
         />
-      </div>
-
-      {/* Quick ratios row */}
-      <div className="grid grid-cols-3 gap-3 lg:grid-cols-6">
-        {[
-          { label: 'OER', value: ratios.oer.value, unit: ratios.oer.unit, status: ratios.oer.status },
-          { label: 'NOI Margin', value: ratios.noiMargin.value, unit: ratios.noiMargin.unit, status: ratios.noiMargin.status },
-          { label: 'Vacancy', value: ratios.vacancyRate.value, unit: ratios.vacancyRate.unit, status: ratios.vacancyRate.status },
-          { label: 'DSCR', value: ratios.dscr.value, unit: ratios.dscr.unit, status: ratios.dscr.status },
-          { label: 'Payroll %', value: ratios.payrollPct.value, unit: ratios.payrollPct.unit, status: ratios.payrollPct.status },
-          { label: 'Mgmt Fee', value: ratios.mgmtFeePct.value, unit: ratios.mgmtFeePct.unit, status: ratios.mgmtFeePct.status },
-        ].map(({ label, value, unit, status }) => (
-          <div key={label} className="card text-center">
-            <p className="text-xs" style={{ color: 'var(--muted)' }}>{label}</p>
-            <p className="text-lg font-bold mt-1" style={{ color: 'var(--text)' }}>
-              {value !== null
-                ? unit === '%' ? `${value.toFixed(1)}%`
-                : unit === 'x' ? `${value.toFixed(2)}x`
-                : `$${value.toFixed(0)}`
-                : 'N/A'}
-            </p>
-            <span className={`badge-${status} text-xs`}>{status}</span>
-          </div>
-        ))}
       </div>
 
       {/* AI Summary */}
