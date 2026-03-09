@@ -341,6 +341,14 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
     setResolvedAnomalies(prev => new Set([...prev, index]));
   }
 
+  function handleUnresolveAnomaly(index: number) {
+    setResolvedAnomalies(prev => {
+      const next = new Set(prev);
+      next.delete(index);
+      return next;
+    });
+  }
+
   async function handleGenerateChart(request: string): Promise<string | undefined> {
     if (!analysis) return;
     const res = await fetch('/api/charts', {
@@ -540,6 +548,7 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
                   resolvedAnomalies={resolvedAnomalies}
                   onExplain={handleExplainAnomaly}
                   onResolve={handleResolveAnomaly}
+                  onUnresolve={handleUnresolveAnomaly}
                 />
               )}
               {activeTab === 'deal' && <DealDetailsTab analysis={analysis} />}
