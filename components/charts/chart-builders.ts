@@ -377,12 +377,30 @@ export function expenseHeatmap(statement: FinancialStatement) {
 
   if (rows.length === 0) return { data: [], layout: {} };
 
-  const z = rows.map(({ row }) =>
+  // Raw dollar values per row (for hover text)
+  const rawZ = rows.map(({ row }) =>
     months.map(m => {
       const v = row!.montlyValues[m];
-      return v !== null ? Math.abs(v) : 0;
+      return v !== null ? Math.abs(v) : null;
     })
   );
+
+  // Per-row normalization: each row scaled 0–1 relative to its own min/max
+  // so color reflects within-row variation, not cross-row magnitude
+  const z = rawZ.map(rowVals => {
+    const defined = rowVals.filter((v): v is number => v !== null);
+    if (defined.length === 0) return rowVals.map(() => 0.5);
+    const min = Math.min(...defined);
+    const max = Math.max(...defined);
+    const range = max - min;
+    return rowVals.map(v => {
+      if (v === null) return 0.5;
+      return range === 0 ? 0.5 : (v - min) / range;
+    });
+  });
+
+  // Custom hover using rawZ (actual dollars, not normalized)
+  const customdata = rawZ.map(rowVals => rowVals.map(v => v ?? 0));
 
   const data: Plotly.Data[] = [
     {
@@ -390,21 +408,18 @@ export function expenseHeatmap(statement: FinancialStatement) {
       x: months,
       y: rows.map(r => r.label),
       z,
+      customdata,
       colorscale: [
-        [0,    'rgba(34,197,94,0.1)'],
-        [0.3,  'rgba(34,197,94,0.45)'],
-        [0.55, 'rgba(250,250,250,0.9)'],
-        [0.75, 'rgba(239,68,68,0.5)'],
-        [1,    'rgba(239,68,68,0.95)'],
+        [0,    '#4ade80'],   // bright green — lowest month for that row
+        [0.35, '#86efac'],   // light green
+        [0.5,  '#f1f5f9'],   // near-white neutral
+        [0.65, '#fca5a5'],   // light red
+        [1,    '#f87171'],   // bright red — highest month for that row
       ],
-      showscale: true,
-      hovertemplate: '<b>%{y}</b><br>%{x}: $%{z:,.0f}<extra></extra>',
-      colorbar: {
-        tickformat: '$,.0f',
-        thickness: 12,
-        len: 0.8,
-        tickfont: { size: 10 },
-      },
+      zmin: 0,
+      zmax: 1,
+      showscale: false,
+      hovertemplate: '<b>%{y}</b><br>%{x}: $%{customdata:,.0f}<extra></extra>',
     } as Plotly.Data,
   ];
 
