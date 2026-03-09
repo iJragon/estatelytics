@@ -1,5 +1,6 @@
 'use client';
 
+import { useTheme } from 'next-themes';
 import type { AnalysisResult } from '@/lib/models/statement';
 import PlotlyChart from '@/components/charts/PlotlyChart';
 import {
@@ -26,11 +27,13 @@ function ChartCard({ title, subtitle, children }: { title: string; subtitle?: st
 }
 
 export default function ExpensesTab({ analysis }: ExpensesTabProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme !== 'light';
   const { statement } = analysis;
 
   const chart1 = expenseBreakdownDonut(statement);
   const chart2 = controllableVsNoncontrollable(statement);
-  const chart3 = expenseHeatmap(statement);
+  const chart3 = expenseHeatmap(statement, isDark);
   const chart4 = cashflowVsNetIncome(statement);
 
   return (
@@ -45,7 +48,7 @@ export default function ExpensesTab({ analysis }: ExpensesTabProps) {
       </div>
 
       {chart3.data.length > 0 && (
-        <ChartCard title="Expense Heatmap" subtitle="Heat intensity shows relative expense levels across months">
+        <ChartCard title="Expense Heatmap" subtitle="Color shows deviation from each category's own monthly average — green is below average, red is above average">
           <PlotlyChart
             data={chart3.data}
             layout={{ ...chart3.layout, title: undefined }}

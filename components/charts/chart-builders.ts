@@ -355,7 +355,7 @@ export function kpiGauge(label: string, value: number | null, lo: number, hi: nu
 }
 
 // 8. Expense heatmap — organized by named categories using AI-extracted key figures
-export function expenseHeatmap(statement: FinancialStatement) {
+export function expenseHeatmap(statement: FinancialStatement, isDark = true) {
   const months = statement.months;
 
   const EXPENSE_KEYS: { key: string; label: string }[] = [
@@ -385,17 +385,19 @@ export function expenseHeatmap(statement: FinancialStatement) {
     })
   );
 
-  // Per-row normalization: each row scaled 0–1 relative to its own min/max
-  // so color reflects within-row variation, not cross-row magnitude
+  // Mean-centered normalization per row: 0.5 = average month, 0 = 2σ below, 1 = 2σ above
+  // This ensures consistently stable rows appear neutral rather than arbitrarily green/red
   const z = rawZ.map(rowVals => {
     const defined = rowVals.filter((v): v is number => v !== null);
     if (defined.length === 0) return rowVals.map(() => 0.5);
-    const min = Math.min(...defined);
-    const max = Math.max(...defined);
-    const range = max - min;
+    const mean = defined.reduce((a, b) => a + b, 0) / defined.length;
+    const variance = defined.reduce((a, b) => a + (b - mean) ** 2, 0) / defined.length;
+    const stddev = Math.sqrt(variance);
     return rowVals.map(v => {
       if (v === null) return 0.5;
-      return range === 0 ? 0.5 : (v - min) / range;
+      if (stddev === 0) return 0.5;
+      // ±2σ maps to 0–1; clamp outside that range
+      return Math.min(1, Math.max(0, 0.5 + (v - mean) / (4 * stddev)));
     });
   });
 
@@ -410,16 +412,23 @@ export function expenseHeatmap(statement: FinancialStatement) {
       z,
       customdata,
       colorscale: [
-        [0,    '#4ade80'],   // bright green — lowest month for that row
-        [0.35, '#86efac'],   // light green
-        [0.5,  '#f1f5f9'],   // near-white neutral
-        [0.65, '#fca5a5'],   // light red
-        [1,    '#f87171'],   // bright red — highest month for that row
+        [0,    isDark ? '#6ee7a0' : '#15803d'],  // below avg: muted green (dark) / deep green (light)
+        [0.35, isDark ? '#bbf7d0' : '#86efac'],  // slightly below avg
+        [0.5,  isDark ? '#1e293b' : '#f8fafc'],  // average: blends into background
+        [0.65, isDark ? '#fecaca' : '#fca5a5'],  // slightly above avg
+        [1,    isDark ? '#fca5a5' : '#b91c1c'],  // above avg: muted red (dark) / deep red (light)
       ],
       zmin: 0,
       zmax: 1,
-      showscale: false,
+      showscale: true,
       hovertemplate: '<b>%{y}</b><br>%{x}: $%{customdata:,.0f}<extra></extra>',
+      colorbar: {
+        tickvals: [0, 0.5, 1],
+        ticktext: ['Below Avg', 'Average', 'Above Avg'],
+        thickness: 12,
+        len: 0.8,
+        tickfont: { size: 10 },
+      },
     } as Plotly.Data,
   ];
 
