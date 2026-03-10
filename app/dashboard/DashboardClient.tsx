@@ -4,9 +4,11 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { buildFinancialContext } from '@/lib/agents/base';
+import { detectCrossYearAnomalies, buildPortfolioKeyMetrics } from '@/lib/agents/portfolio-agent';
 import type { AnalysisResult } from '@/lib/models/statement';
 import type { ChatMessage } from '@/lib/agents/chat-agent';
 import type { ChartSpec } from '@/lib/agents/viz-agent';
+import type { PropertyEntry, PropertyDetail, CrossYearFlag, PortfolioKeyMetric } from '@/lib/models/portfolio';
 import type { HistoryEntry } from './page';
 import Sidebar from '@/components/dashboard/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -19,10 +21,12 @@ import AnomaliesTab from '@/components/dashboard/tabs/AnomaliesTab';
 import DealDetailsTab, { type DealInputs, DEFAULT_DEAL_INPUTS } from '@/components/dashboard/tabs/DealDetailsTab';
 import ChatTab from '@/components/dashboard/tabs/ChatTab';
 import CustomChartsTab from '@/components/dashboard/tabs/CustomChartsTab';
+import PropertyView from '@/components/portfolio/PropertyView';
 
 interface DashboardClientProps {
   userEmail: string;
   initialHistory: HistoryEntry[];
+  initialProperties: PropertyEntry[];
 }
 
 const ANALYSIS_TABS = [
@@ -40,8 +44,10 @@ const TOOL_TABS = [
   { id: 'charts', label: 'Charts' },
 ];
 
-export default function DashboardClient({ userEmail, initialHistory }: DashboardClientProps) {
+export default function DashboardClient({ userEmail, initialHistory, initialProperties }: DashboardClientProps) {
   const router = useRouter();
+
+  // ── Analysis view state ────────────────────────────────────────────────────
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState('');
@@ -59,7 +65,19 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
   const [showForceConfirm, setShowForceConfirm] = useState(false);
   const selectedFileRef = useRef<File | null>(null);
 
-  // Persist tool state to localStorage keyed by fileHash
+  // ── Portfolio view state ───────────────────────────────────────────────────
+  const [properties, setProperties] = useState<PropertyEntry[]>(initialProperties);
+  const [activeView, setActiveView] = useState<'analysis' | 'property'>('analysis');
+  const [activePropertyId, setActivePropertyId] = useState<string | undefined>();
+  const [propertyDetail, setPropertyDetail] = useState<PropertyDetail | null>(null);
+  const [propertyAnalyses, setPropertyAnalyses] = useState<AnalysisResult[]>([]);
+  const [portfolioSummaryText, setPortfolioSummaryText] = useState('');
+  const [portfolioStreaming, setPortfolioStreaming] = useState(false);
+  const [portfolioCrossYearFlags, setPortfolioCrossYearFlags] = useState<CrossYearFlag[]>([]);
+  const [portfolioKeyMetrics, setPortfolioKeyMetrics] = useState<PortfolioKeyMetric[]>([]);
+  const [propertyLoading, setPropertyLoading] = useState(false);
+
+  // ── Tool state persistence ─────────────────────────────────────────────────
   useEffect(() => {
     if (!analysis) return;
     try { localStorage.setItem(`sa_charts_${analysis.fileHash}`, JSON.stringify(customCharts)); } catch {}
@@ -82,6 +100,7 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
     }
   }
 
+  // ── File upload / analysis ─────────────────────────────────────────────────
   const handleFileSelect = useCallback((file: File) => {
     selectedFileRef.current = file;
     setAnalyzeError('');
@@ -120,13 +139,12 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
     setAnalyzeError('');
     setDuplicateNotice('');
     setSummaryText('');
+    setActiveView('analysis');
 
-    // Only reset tool state on a fresh analysis, not on force re-analyze
     if (!force) {
       setChatHistory([]);
       setAnomalyExplanations({});
       setResolvedAnomalies(new Set());
-      // charts and dealInputs loaded from storage after we know the fileHash
     }
 
     try {
@@ -134,10 +152,7 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
       formData.append('file', file);
 
       const url = force ? '/api/analyze?force=true' : '/api/analyze';
-      const res = await fetch(url, {
-        method: 'POST',
-        body: formData,
-      });
+      const res = await fetch(url, { method: 'POST', body: formData });
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Analysis failed' }));
@@ -149,7 +164,6 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
       setActiveTab('summary');
 
       if (result.fromCache && !force) {
-        // Duplicate file: load stored state, skip streaming, do NOT modify history
         setDuplicateNotice(`This file was already analyzed. Loaded from history.`);
         setSummaryText(result.summaryText ?? '');
         setChatHistory(result.chatHistory ?? []);
@@ -159,10 +173,8 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
         return;
       }
 
-      // Load persisted tool state for this file (charts, deal inputs)
       loadToolsFromStorage(result.fileHash);
 
-      // Update history
       setHistory(prev => {
         const existing = prev.find(h => h.id === result.fileHash);
         if (existing) return prev;
@@ -176,20 +188,14 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
         return [newEntry, ...prev].slice(0, 20);
       });
 
-      // Stream executive summary then persist it
       setSummaryStreaming(true);
       const context = buildFinancialContext(result.statement, result.ratios, result.anomalies, result.trends);
       let summaryAcc = '';
       try {
-        await streamText(
-          '/api/summary',
-          { context },
-          chunk => {
-            summaryAcc += chunk;
-            setSummaryText(summaryAcc);
-          },
-        );
-        // Save summary to DB so it's available on history reload
+        await streamText('/api/summary', { context }, chunk => {
+          summaryAcc += chunk;
+          setSummaryText(summaryAcc);
+        });
         fetch('/api/analyze', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -214,13 +220,11 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
   async function confirmForceAnalyze() {
     setShowForceConfirm(false);
 
-    // If a file is selected, use the normal upload-and-analyze flow
     if (selectedFileRef.current) {
       runAnalyze(true);
       return;
     }
 
-    // No file selected — reprocess from stored data (history load case)
     if (!analysis) return;
     setIsAnalyzing(true);
     setAnalyzeError('');
@@ -244,13 +248,10 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
       const result: AnalysisResult = await res.json();
       setAnalysis(result);
       setActiveTab('summary');
-
-      // Update history entry timestamp
       setHistory(prev => prev.map(h =>
         h.id === result.fileHash ? { ...h, analyzedAt: result.analyzedAt } : h,
       ));
 
-      // Stream fresh summary and persist it
       setSummaryStreaming(true);
       const context = buildFinancialContext(result.statement, result.ratios, result.anomalies, result.trends);
       let summaryAcc = '';
@@ -297,11 +298,14 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
       setResolvedAnomalies(new Set());
       setDuplicateNotice('');
       loadToolsFromStorage(result.fileHash);
+      setActiveView('analysis');
+      setActivePropertyId(undefined);
     } catch (err) {
       console.error('Failed to load history:', err);
     }
   }
 
+  // ── Chat ───────────────────────────────────────────────────────────────────
   async function handleSendChat(question: string) {
     if (!analysis) return;
     const context = buildFinancialContext(analysis.statement, analysis.ratios, analysis.anomalies, analysis.trends);
@@ -326,7 +330,6 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
           });
         },
       );
-      // Persist updated chat history
       const finalHistory = [...chatHistory, userMsg, { role: 'assistant' as const, content: accResponse }];
       fetch('/api/analyze', {
         method: 'PATCH',
@@ -338,28 +341,21 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
     }
   }
 
-  function handleClearChat() {
-    setChatHistory([]);
-  }
+  function handleClearChat() { setChatHistory([]); }
 
+  // ── Anomalies ──────────────────────────────────────────────────────────────
   async function handleExplainAnomaly(index: number) {
     if (!analysis) return;
     const anomaly = analysis.anomalies[index];
     if (!anomaly) return;
     const context = buildFinancialContext(analysis.statement, analysis.ratios, analysis.anomalies, analysis.trends);
-
     setAnomalyExplanations(prev => ({ ...prev, [index]: '' }));
-
     let acc = '';
     try {
-      await streamText(
-        '/api/explain',
-        { anomaly, context },
-        chunk => {
-          acc += chunk;
-          setAnomalyExplanations(prev => ({ ...prev, [index]: acc }));
-        },
-      );
+      await streamText('/api/explain', { anomaly, context }, chunk => {
+        acc += chunk;
+        setAnomalyExplanations(prev => ({ ...prev, [index]: acc }));
+      });
     } catch {
       setAnomalyExplanations(prev => ({ ...prev, [index]: 'Failed to generate explanation.' }));
     }
@@ -368,15 +364,11 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
   function handleResolveAnomaly(index: number) {
     setResolvedAnomalies(prev => new Set([...prev, index]));
   }
-
   function handleUnresolveAnomaly(index: number) {
-    setResolvedAnomalies(prev => {
-      const next = new Set(prev);
-      next.delete(index);
-      return next;
-    });
+    setResolvedAnomalies(prev => { const next = new Set(prev); next.delete(index); return next; });
   }
 
+  // ── Charts ─────────────────────────────────────────────────────────────────
   async function handleGenerateChart(request: string): Promise<string | undefined> {
     if (!analysis) return;
     const res = await fetch('/api/charts', {
@@ -386,24 +378,17 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
     });
     if (!res.ok) return 'Failed to reach the chart generation service.';
     const result = await res.json();
-    if ('error' in result) {
-      return result.error as string;
-    }
+    if ('error' in result) return result.error as string;
     setCustomCharts(prev => [
       { spec: result.spec, explanation: result.explanation, title: result.spec.title },
       ...prev,
     ]);
     return undefined;
   }
+  function handleRemoveChart(index: number) { setCustomCharts(prev => prev.filter((_, i) => i !== index)); }
+  function handleClearCharts() { setCustomCharts([]); }
 
-  function handleRemoveChart(index: number) {
-    setCustomCharts(prev => prev.filter((_, i) => i !== index));
-  }
-
-  function handleClearCharts() {
-    setCustomCharts([]);
-  }
-
+  // ── Sign out ───────────────────────────────────────────────────────────────
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -411,202 +396,313 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
     router.push('/login');
   }
 
+  // ── Portfolio / Properties ─────────────────────────────────────────────────
+  async function handlePropertyCreate(name: string, address?: string) {
+    const res = await fetch('/api/properties', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, address }),
+    });
+    if (!res.ok) throw new Error('Failed to create property');
+    const { property } = await res.json() as { property: PropertyEntry };
+    setProperties(prev => [property, ...prev]);
+  }
+
+  async function handlePropertyDelete(id: string) {
+    await fetch(`/api/properties/${id}`, { method: 'DELETE' });
+    setProperties(prev => prev.filter(p => p.id !== id));
+    if (activePropertyId === id) {
+      setActivePropertyId(undefined);
+      setPropertyDetail(null);
+      setPropertyAnalyses([]);
+      setActiveView('analysis');
+    }
+  }
+
+  async function handlePropertySelect(prop: PropertyEntry) {
+    setActiveView('property');
+    setActivePropertyId(prop.id);
+    setPropertyLoading(true);
+    setPortfolioSummaryText('');
+
+    try {
+      const res = await fetch(`/api/properties/${prop.id}`);
+      if (!res.ok) throw new Error('Failed to load property');
+      const { property, analyses } = await res.json() as {
+        property: PropertyDetail;
+        analyses: AnalysisResult[];
+      };
+      setPropertyDetail(property);
+      setPropertyAnalyses(analyses);
+      setPortfolioSummaryText(property.portfolioSummary ?? '');
+      setPortfolioCrossYearFlags(detectCrossYearAnomalies(analyses, property.statements.map(s => s.yearLabel)));
+      setPortfolioKeyMetrics(buildPortfolioKeyMetrics(analyses, property.statements.map(s => s.yearLabel)));
+    } catch (err) {
+      console.error('Failed to load property:', err);
+    } finally {
+      setPropertyLoading(false);
+    }
+  }
+
+  async function handlePortfolioGenerateSummary() {
+    if (!propertyDetail || propertyAnalyses.length === 0) return;
+    setPortfolioStreaming(true);
+    setPortfolioSummaryText('');
+    const yearLabels = propertyDetail.statements.map(s => s.yearLabel);
+    let acc = '';
+    try {
+      await streamText(
+        `/api/properties/${propertyDetail.id}/analyze`,
+        { propertyName: propertyDetail.name, analyses: propertyAnalyses, yearLabels },
+        chunk => { acc += chunk; setPortfolioSummaryText(acc); },
+      );
+      // Update local property detail
+      setPropertyDetail(prev => prev ? { ...prev, portfolioSummary: acc, portfolioAnalyzedAt: new Date().toISOString() } : prev);
+    } finally {
+      setPortfolioStreaming(false);
+    }
+  }
+
+  async function handleAddStatement(analysisId: string, yearLabel: string) {
+    if (!propertyDetail) return;
+    const res = await fetch(`/api/properties/${propertyDetail.id}/statements`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analysisId, yearLabel }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Failed to add statement' }));
+      throw new Error(err.error || 'Failed to add statement');
+    }
+    // Reload property to get updated data
+    await handlePropertySelect({ id: propertyDetail.id, name: propertyDetail.name, address: propertyDetail.address, createdAt: propertyDetail.createdAt, statementCount: 0 });
+    // Update sidebar count
+    setProperties(prev => prev.map(p => p.id === propertyDetail.id ? { ...p, statementCount: p.statementCount + 1 } : p));
+  }
+
+  async function handleRemoveStatement(stmtId: string) {
+    if (!propertyDetail) return;
+    await fetch(`/api/properties/${propertyDetail.id}/statements/${stmtId}`, { method: 'DELETE' });
+    // Reload property
+    await handlePropertySelect({ id: propertyDetail.id, name: propertyDetail.name, address: propertyDetail.address, createdAt: propertyDetail.createdAt, statementCount: 0 });
+    setProperties(prev => prev.map(p => p.id === propertyDetail.id ? { ...p, statementCount: Math.max(0, p.statementCount - 1) } : p));
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--bg)' }}>
-      {/* Sidebar */}
       <Sidebar
         userEmail={userEmail}
         history={history}
         hasAnalysis={analysis !== null}
+        properties={properties}
+        activePropertyId={activePropertyId}
+        isAnalyzing={isAnalyzing}
         onFileSelect={handleFileSelect}
         onAnalyze={handleAnalyze}
         onForceAnalyze={handleForceAnalyze}
-        isAnalyzing={isAnalyzing}
         onHistorySelect={handleHistorySelect}
         onHistoryDelete={handleHistoryDelete}
         onClearHistory={handleClearHistory}
+        onPropertySelect={handlePropertySelect}
+        onPropertyCreate={handlePropertyCreate}
+        onPropertyDelete={handlePropertyDelete}
         onSignOut={handleSignOut}
       />
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
-        <div
-          className="flex items-center justify-between px-6 py-3 border-b"
-          style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}
-        >
-          <div>
-            {analysis ? (
-              <div>
-                <h2 className="font-semibold" style={{ color: 'var(--text)' }}>
-                  {analysis.statement.propertyName}
-                </h2>
-                <p className="text-sm" style={{ color: 'var(--muted)' }}>
-                  {analysis.statement.period} &middot; {analysis.fileName}
-                </p>
-              </div>
-            ) : (
-              <p style={{ color: 'var(--muted)' }}>No file analyzed</p>
-            )}
-          </div>
-          <ThemeToggle />
-        </div>
-
-        {/* Tabs */}
-        {analysis && (
-          <div
-            className="flex border-b overflow-x-auto"
-            style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}
-          >
-            {/* Analysis tabs */}
-            {ANALYSIS_TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className="px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors"
-                style={{
-                  color: activeTab === tab.id ? 'var(--accent)' : 'var(--muted)',
-                  borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
-                }}
-              >
-                {tab.label}
-                {tab.id === 'anomalies' && analysis.anomalies.filter((a, i) => a.severity === 'high' && !resolvedAnomalies.has(i)).length > 0 && (
-                  <span
-                    className="ml-1 px-1.5 py-0.5 text-xs rounded-full"
-                    style={{ backgroundColor: 'var(--danger)', color: 'white' }}
-                  >
-                    {analysis.anomalies.filter((a, i) => a.severity === 'high' && !resolvedAnomalies.has(i)).length}
-                  </span>
-                )}
-              </button>
-            ))}
-
-            {/* Spacer pushes Tools to the right */}
-            <div className="flex-1" />
-
-            {/* Separator */}
-            <div className="flex items-center" style={{ borderLeft: '1px solid var(--border)', margin: '6px 0' }} />
-            <span
-              className="self-center px-3 text-xs font-semibold uppercase tracking-wider whitespace-nowrap"
-              style={{ color: 'var(--muted)', opacity: 0.5 }}
-            >
-              Tools
-            </span>
-
-            {/* Tool tabs */}
-            {TOOL_TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className="px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors"
-                style={{
-                  color: activeTab === tab.id ? 'var(--accent)' : 'var(--muted)',
-                  borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Tab content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {analyzeError && (
-            <div className="mb-4 p-3 rounded-md text-sm" style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}>
-              {analyzeError}
-            </div>
-          )}
-
-          {duplicateNotice && (
-            <div className="mb-4 p-3 rounded-md text-sm flex items-center gap-2" style={{ backgroundColor: 'rgba(59,130,246,0.08)', color: 'var(--accent)', border: '1px solid rgba(59,130,246,0.2)' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              {duplicateNotice} Use Force Re-analyze in the sidebar to re-run the AI extraction.
-            </div>
-          )}
-
-          {isAnalyzing && (
+        {activeView === 'property' && propertyDetail ? (
+          // ── Property portfolio view ────────────────────────────────────────
+          propertyLoading ? (
             <div className="flex flex-col items-center justify-center h-full gap-4">
-              <div
-                className="w-12 h-12 rounded-full border-4 border-t-transparent animate-spin"
-                style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }}
-              />
-              <p style={{ color: 'var(--muted)' }}>Analyzing your statement...</p>
+              <div className="w-12 h-12 rounded-full border-4 border-t-transparent animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }} />
+              <p style={{ color: 'var(--muted)' }}>Loading property data...</p>
             </div>
-          )}
-
-          {!isAnalyzing && !analysis && (
-            <div className="flex flex-col items-center justify-center h-full gap-6 text-center">
+          ) : (
+            <PropertyView
+              property={propertyDetail}
+              analyses={propertyAnalyses}
+              crossYearFlags={portfolioCrossYearFlags}
+              keyMetrics={portfolioKeyMetrics}
+              summaryText={portfolioSummaryText}
+              summaryStreaming={portfolioStreaming}
+              history={history}
+              onGenerateSummary={handlePortfolioGenerateSummary}
+              onAddStatement={handleAddStatement}
+              onRemoveStatement={handleRemoveStatement}
+              onDeleteProperty={() => handlePropertyDelete(propertyDetail.id)}
+            />
+          )
+        ) : (
+          // ── Individual statement analysis view ─────────────────────────────
+          <>
+            {/* Top bar */}
+            <div
+              className="flex items-center justify-between px-6 py-3 border-b"
+              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}
+            >
               <div>
-                <h2 className="text-xl font-semibold mb-2" style={{ color: 'var(--text)' }}>
-                  Welcome to Statement Utility
-                </h2>
-                <p className="max-w-md" style={{ color: 'var(--muted)' }}>
-                  Upload an Excel P&L statement using the sidebar to get started. You&apos;ll receive
-                  automated ratio analysis, AI insights, trend detection, and anomaly alerts.
-                </p>
-              </div>
-              <div className="grid grid-cols-3 gap-4 max-w-lg">
-                {['Financial Ratios', 'AI Insights', 'Trend Analysis', 'Anomaly Detection', 'Chat Interface', 'Custom Charts'].map(f => (
-                  <div key={f} className="card text-sm text-center" style={{ color: 'var(--muted)' }}>
-                    {f}
+                {analysis ? (
+                  <div>
+                    <h2 className="font-semibold" style={{ color: 'var(--text)' }}>
+                      {analysis.statement.propertyName}
+                    </h2>
+                    <p className="text-sm" style={{ color: 'var(--muted)' }}>
+                      {analysis.statement.period} &middot; {analysis.fileName}
+                    </p>
                   </div>
+                ) : (
+                  <p style={{ color: 'var(--muted)' }}>No file analyzed</p>
+                )}
+              </div>
+              <ThemeToggle />
+            </div>
+
+            {/* Tabs */}
+            {analysis && (
+              <div
+                className="flex border-b overflow-x-auto"
+                style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}
+              >
+                {ANALYSIS_TABS.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className="px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors"
+                    style={{
+                      color: activeTab === tab.id ? 'var(--accent)' : 'var(--muted)',
+                      borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
+                    }}
+                  >
+                    {tab.label}
+                    {tab.id === 'anomalies' && analysis.anomalies.filter((a, i) => a.severity === 'high' && !resolvedAnomalies.has(i)).length > 0 && (
+                      <span
+                        className="ml-1 px-1.5 py-0.5 text-xs rounded-full"
+                        style={{ backgroundColor: 'var(--danger)', color: 'white' }}
+                      >
+                        {analysis.anomalies.filter((a, i) => a.severity === 'high' && !resolvedAnomalies.has(i)).length}
+                      </span>
+                    )}
+                  </button>
+                ))}
+
+                <div className="flex-1" />
+                <div className="flex items-center" style={{ borderLeft: '1px solid var(--border)', margin: '6px 0' }} />
+                <span
+                  className="self-center px-3 text-xs font-semibold uppercase tracking-wider whitespace-nowrap"
+                  style={{ color: 'var(--muted)', opacity: 0.5 }}
+                >
+                  Tools
+                </span>
+
+                {TOOL_TABS.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className="px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors"
+                    style={{
+                      color: activeTab === tab.id ? 'var(--accent)' : 'var(--muted)',
+                      borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
                 ))}
               </div>
-            </div>
-          )}
+            )}
 
-          {!isAnalyzing && analysis && (
-            <>
-              {activeTab === 'summary' && (
-                <SummaryTab
-                  analysis={analysis}
-                  summaryText={summaryText}
-                  summaryStreaming={summaryStreaming}
-                />
+            {/* Tab content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {analyzeError && (
+                <div className="mb-4 p-3 rounded-md text-sm" style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}>
+                  {analyzeError}
+                </div>
               )}
-              {activeTab === 'revenue' && <RevenueTab analysis={analysis} />}
-              {activeTab === 'expenses' && <ExpensesTab analysis={analysis} />}
-              {activeTab === 'ratios' && <RatiosTab analysis={analysis} />}
-              {activeTab === 'trends' && <TrendsTab analysis={analysis} />}
-              {activeTab === 'anomalies' && (
-                <AnomaliesTab
-                  analysis={analysis}
-                  anomalyExplanations={anomalyExplanations}
-                  resolvedAnomalies={resolvedAnomalies}
-                  onExplain={handleExplainAnomaly}
-                  onResolve={handleResolveAnomaly}
-                  onUnresolve={handleUnresolveAnomaly}
-                />
+
+              {duplicateNotice && (
+                <div className="mb-4 p-3 rounded-md text-sm flex items-center gap-2" style={{ backgroundColor: 'rgba(59,130,246,0.08)', color: 'var(--accent)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                  {duplicateNotice} Use Force Re-analyze in the sidebar to re-run the AI extraction.
+                </div>
               )}
-              {activeTab === 'deal' && (
-                <DealDetailsTab
-                  analysis={analysis}
-                  inputs={dealInputs}
-                  onInputChange={(key, value) => setDealInputs(prev => ({ ...prev, [key]: value }))}
-                />
+
+              {isAnalyzing && (
+                <div className="flex flex-col items-center justify-center h-full gap-4">
+                  <div className="w-12 h-12 rounded-full border-4 border-t-transparent animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }} />
+                  <p style={{ color: 'var(--muted)' }}>Analyzing your statement...</p>
+                </div>
               )}
-              {activeTab === 'chat' && (
-                <ChatTab
-                  analysis={analysis}
-                  chatHistory={chatHistory}
-                  isChatStreaming={isChatStreaming}
-                  onSend={handleSendChat}
-                  onClearChat={handleClearChat}
-                />
+
+              {!isAnalyzing && !analysis && (
+                <div className="flex flex-col items-center justify-center h-full gap-6 text-center">
+                  <div>
+                    <h2 className="text-xl font-semibold mb-2" style={{ color: 'var(--text)' }}>
+                      Welcome to Statement Utility
+                    </h2>
+                    <p className="max-w-md" style={{ color: 'var(--muted)' }}>
+                      Upload an Excel P&L statement using the sidebar to get started. You&apos;ll receive
+                      automated ratio analysis, AI insights, trend detection, and anomaly alerts.
+                      Or create a Property to track multiple statements over time.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 max-w-lg">
+                    {['Financial Ratios', 'AI Insights', 'Trend Analysis', 'Anomaly Detection', 'Chat Interface', 'Property Portfolio'].map(f => (
+                      <div key={f} className="card text-sm text-center" style={{ color: 'var(--muted)' }}>{f}</div>
+                    ))}
+                  </div>
+                </div>
               )}
-              {activeTab === 'charts' && (
-                <CustomChartsTab
-                  analysis={analysis}
-                  customCharts={customCharts}
-                  onGenerate={handleGenerateChart}
-                  onRemoveChart={handleRemoveChart}
-                  onClearCharts={handleClearCharts}
-                />
+
+              {!isAnalyzing && analysis && (
+                <>
+                  {activeTab === 'summary' && (
+                    <SummaryTab analysis={analysis} summaryText={summaryText} summaryStreaming={summaryStreaming} />
+                  )}
+                  {activeTab === 'revenue' && <RevenueTab analysis={analysis} />}
+                  {activeTab === 'expenses' && <ExpensesTab analysis={analysis} />}
+                  {activeTab === 'ratios' && <RatiosTab analysis={analysis} />}
+                  {activeTab === 'trends' && <TrendsTab analysis={analysis} />}
+                  {activeTab === 'anomalies' && (
+                    <AnomaliesTab
+                      analysis={analysis}
+                      anomalyExplanations={anomalyExplanations}
+                      resolvedAnomalies={resolvedAnomalies}
+                      onExplain={handleExplainAnomaly}
+                      onResolve={handleResolveAnomaly}
+                      onUnresolve={handleUnresolveAnomaly}
+                    />
+                  )}
+                  {activeTab === 'deal' && (
+                    <DealDetailsTab
+                      analysis={analysis}
+                      inputs={dealInputs}
+                      onInputChange={(key, value) => setDealInputs(prev => ({ ...prev, [key]: value }))}
+                    />
+                  )}
+                  {activeTab === 'chat' && (
+                    <ChatTab
+                      analysis={analysis}
+                      chatHistory={chatHistory}
+                      isChatStreaming={isChatStreaming}
+                      onSend={handleSendChat}
+                      onClearChat={handleClearChat}
+                    />
+                  )}
+                  {activeTab === 'charts' && (
+                    <CustomChartsTab
+                      analysis={analysis}
+                      customCharts={customCharts}
+                      onGenerate={handleGenerateChart}
+                      onRemoveChart={handleRemoveChart}
+                      onClearCharts={handleClearCharts}
+                    />
+                  )}
+                </>
               )}
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Force Re-analyze confirmation modal */}
@@ -615,9 +711,9 @@ export default function DashboardClient({ userEmail, initialHistory }: Dashboard
           <div className="rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl" style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}>
             <div className="flex items-center gap-2 mb-3">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/>
-                <line x1="12" y1="17" x2="12.01" y2="17"/>
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
               <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Re-run AI Analysis?</h3>
             </div>
