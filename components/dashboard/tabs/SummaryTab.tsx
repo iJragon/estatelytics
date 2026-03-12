@@ -177,27 +177,24 @@ export default function SummaryTab({ analysis, summaryText, summaryStreaming, on
         className="rounded-xl px-6 py-5 border"
         style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
       >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--muted)' }}>
-              Executive Summary
-            </p>
-            <h2 className="text-xl font-bold leading-tight" style={{ color: 'var(--text)' }}>
-              {statement.propertyName || 'Property P&L Analysis'}
-            </h2>
-            <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-              Period: <strong style={{ color: 'var(--text)' }}>{statement.period}</strong>
-              &nbsp;&nbsp;·&nbsp;&nbsp;Prepared: {reportDate}
-              &nbsp;&nbsp;·&nbsp;&nbsp;Source: {analysis.fileName}
-            </p>
-          </div>
-          <div
-            className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold"
-            style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: 'var(--accent)', border: '1px solid rgba(59,130,246,0.2)' }}
-          >
-            AI Analysis
-          </div>
-        </div>
+        <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: 'var(--muted)' }}>
+          Executive Summary
+        </p>
+        <h2 className="text-xl font-bold leading-tight mb-3" style={{ color: 'var(--text)' }}>
+          {statement.propertyName || 'Property P&L Analysis'}
+        </h2>
+        <dl className="space-y-1">
+          {[
+            { label: 'Period', value: statement.period },
+            { label: 'Prepared', value: reportDate },
+            { label: 'Source', value: analysis.fileName },
+          ].map(({ label, value }) => (
+            <div key={label} className="flex gap-2 text-sm">
+              <dt className="w-20 flex-shrink-0 font-medium" style={{ color: 'var(--muted)' }}>{label}</dt>
+              <dd className="truncate" style={{ color: 'var(--text)' }}>{value}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
 
       {/* ── Anomaly Alert ────────────────────────────────────────────── */}
@@ -336,40 +333,20 @@ export default function SummaryTab({ analysis, summaryText, summaryStreaming, on
 
       {/* ── AI Narrative ─────────────────────────────────────────────── */}
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-              style={{ color: 'var(--accent)' }}>
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>AI Narrative</h3>
-            {summaryStreaming && (
-              <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--accent)' }}>
-                <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Generating…
-              </span>
-            )}
-          </div>
-          {onTabChange && (
-            <div className="flex gap-3">
-              {(['anomalies', 'trends'] as const).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => onTabChange(tab)}
-                  className="text-xs hover:opacity-70 transition-opacity capitalize flex items-center gap-1"
-                  style={{ color: 'var(--accent)' }}
-                >
-                  {tab}
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                    <polyline points="12 5 19 12 12 19" />
-                  </svg>
-                </button>
-              ))}
-            </div>
+        <div className="flex items-center gap-2 mb-4">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+            style={{ color: 'var(--accent)' }}>
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>AI Narrative</h3>
+          {summaryStreaming && (
+            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--accent)' }}>
+              <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Generating…
+            </span>
           )}
         </div>
 

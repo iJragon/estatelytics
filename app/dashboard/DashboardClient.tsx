@@ -357,6 +357,19 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
     setHistory(prev => prev.filter(h => h.id !== id));
   }
 
+  async function handleHistoryRename(id: string, newName: string) {
+    await fetch(`/api/history/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ propertyName: newName }),
+    });
+    setHistory(prev => prev.map(h => h.id === id ? { ...h, propertyName: newName } : h));
+    // Update currently loaded analysis name if it's the same entry
+    if (analysis && (analysis.fileHash === id || history.find(h => h.id === id)?.fileHash === analysis.fileHash)) {
+      setAnalysis(prev => prev ? { ...prev, statement: { ...prev.statement, propertyName: newName } } : prev);
+    }
+  }
+
   async function handleClearHistory() {
     await fetch('/api/history?all=true', { method: 'DELETE' });
     setHistory([]);
@@ -626,6 +639,7 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
         onForceAnalyze={handleForceAnalyze}
         onHistorySelect={handleHistorySelect}
         onHistoryDelete={handleHistoryDelete}
+        onHistoryRename={handleHistoryRename}
         onClearHistory={handleClearHistory}
         onPropertySelect={handlePropertySelect}
         onPropertyCreate={handlePropertyCreate}

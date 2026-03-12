@@ -17,6 +17,7 @@ interface SidebarProps {
   onForceAnalyze: () => void;
   onHistorySelect: (entry: HistoryEntry) => void;
   onHistoryDelete: (id: string) => void;
+  onHistoryRename: (id: string, newName: string) => Promise<void>;
   onClearHistory: () => void;
   onPropertySelect: (property: PropertyEntry) => void;
   onPropertyCreate: (name: string, address?: string) => Promise<void>;
@@ -44,6 +45,7 @@ export default function Sidebar({
   onForceAnalyze,
   onHistorySelect,
   onHistoryDelete,
+  onHistoryRename,
   onClearHistory,
   onPropertySelect,
   onPropertyCreate,
@@ -55,6 +57,8 @@ export default function Sidebar({
   const [newPropName, setNewPropName] = useState('');
   const [newPropAddress, setNewPropAddress] = useState('');
   const [creatingProp, setCreatingProp] = useState(false);
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
+  const [editingHistoryName, setEditingHistoryName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = useCallback((files: FileList | File[]) => {
@@ -337,29 +341,84 @@ export default function Sidebar({
           ) : (
             <div className="space-y-1">
               {history.map(entry => (
-                <div key={entry.id} className="group flex items-start gap-1">
+                <div key={entry.id} className="group rounded-md" style={{ backgroundColor: 'var(--bg)' }}>
+                  {/* Title row: editable name + action buttons */}
+                  <div className="flex items-center gap-1 px-2 pt-2">
+                    {editingHistoryId === entry.id ? (
+                      <form
+                        className="flex-1 flex items-center gap-1 min-w-0"
+                        onSubmit={async e => {
+                          e.preventDefault();
+                          const name = editingHistoryName.trim();
+                          if (name && name !== entry.propertyName) await onHistoryRename(entry.id, name);
+                          setEditingHistoryId(null);
+                        }}
+                      >
+                        <input
+                          autoFocus
+                          value={editingHistoryName}
+                          onChange={e => setEditingHistoryName(e.target.value)}
+                          onBlur={async () => {
+                            const name = editingHistoryName.trim();
+                            if (name && name !== entry.propertyName) await onHistoryRename(entry.id, name);
+                            setEditingHistoryId(null);
+                          }}
+                          className="flex-1 min-w-0 bg-transparent outline-none text-xs font-medium border-b"
+                          style={{ color: 'var(--text)', borderColor: 'var(--accent)' }}
+                        />
+                        <button type="submit" className="flex-shrink-0 p-0.5 hover:opacity-70" style={{ color: 'var(--accent)' }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        </button>
+                      </form>
+                    ) : (
+                      <button
+                        onClick={() => onHistorySelect(entry)}
+                        className="flex-1 text-left text-xs font-medium truncate min-w-0 hover:opacity-70 transition-opacity"
+                        style={{ color: 'var(--text)' }}
+                      >
+                        {entry.propertyName || entry.fileName}
+                      </button>
+                    )}
+                    {/* Pencil — rename */}
+                    {editingHistoryId !== entry.id && (
+                      <button
+                        onClick={() => { setEditingHistoryId(entry.id); setEditingHistoryName(entry.propertyName || entry.fileName); }}
+                        className="flex-shrink-0 opacity-0 group-hover:opacity-50 hover:opacity-100 transition-opacity p-0.5"
+                        style={{ color: 'var(--muted)' }}
+                        title="Rename"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </button>
+                    )}
+                    {/* Delete */}
+                    <button
+                      onClick={() => onHistoryDelete(entry.id)}
+                      className="flex-shrink-0 opacity-0 group-hover:opacity-50 hover:opacity-100 transition-opacity p-0.5"
+                      style={{ color: 'var(--muted)' }}
+                      title="Delete"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                  {/* File name + meta */}
                   <button
                     onClick={() => onHistorySelect(entry)}
-                    className="flex-1 text-left p-2 rounded-md transition-colors hover:opacity-80 min-w-0"
-                    style={{ backgroundColor: 'var(--bg)' }}
+                    className="w-full text-left px-2 pb-2 pt-0.5 hover:opacity-70 transition-opacity"
                   >
-                    <p className="text-xs font-medium truncate" style={{ color: 'var(--text)' }}>
-                      {entry.propertyName || entry.fileName}
-                    </p>
                     <p className="text-xs truncate" style={{ color: 'var(--muted)' }}>
+                      {entry.fileName}
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--muted)', opacity: 0.7 }}>
                       {entry.period} &middot; {formatDate(entry.analyzedAt)}
                     </p>
-                  </button>
-                  <button
-                    onClick={() => onHistoryDelete(entry.id)}
-                    className="flex-shrink-0 mt-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:opacity-80"
-                    style={{ color: 'var(--muted)' }}
-                    title="Delete"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
                   </button>
                 </div>
               ))}
