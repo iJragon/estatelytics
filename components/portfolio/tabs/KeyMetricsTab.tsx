@@ -62,7 +62,7 @@ export default function KeyMetricsTab({ metrics, periods }: KeyMetricsTabProps) 
             if (chg !== null) {
               const isPositive = chg > 0;
               const isGood = higherIsBad ? !isPositive : isPositive;
-              chgColor = isGood ? '#16a34a' : Math.abs(chg) > 10 ? '#ef4444' : '#f59e0b';
+              chgColor = isGood ? 'var(--success)' : Math.abs(chg) > 10 ? 'var(--danger)' : 'var(--warning)';
             }
 
             return (

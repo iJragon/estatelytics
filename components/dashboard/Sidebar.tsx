@@ -26,6 +26,9 @@ interface SidebarProps {
   onClearHistory: () => void;
   onPropertySelect: (property: PropertyEntry) => void;
   onPropertyCreate: (name: string, address?: string) => Promise<void>;
+  onPropertyRename: (id: string, name: string) => Promise<void>;
+  onPropertyAddressEdit: (id: string, address: string) => Promise<void>;
+  onPropertyDelete: (id: string) => void;
   onSignOut: () => void;
 }
 
@@ -54,6 +57,9 @@ export default function Sidebar({
   onClearHistory,
   onPropertySelect,
   onPropertyCreate,
+  onPropertyRename,
+  onPropertyAddressEdit,
+  onPropertyDelete,
   onSignOut,
 }: SidebarProps) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_WIDTH);
@@ -65,8 +71,37 @@ export default function Sidebar({
   const [creatingProp, setCreatingProp] = useState(false);
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
   const [editingHistoryName, setEditingHistoryName] = useState('');
+  // Property inline editing
+  const [editingPropId, setEditingPropId] = useState<string | null>(null);
+  const [editingPropField, setEditingPropField] = useState<'name' | 'address' | null>(null);
+  const [editingPropValue, setEditingPropValue] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sidebarWidthRef = useRef(DEFAULT_WIDTH);
+
+  function startPropEdit(id: string, field: 'name' | 'address', current: string) {
+    setEditingPropId(id);
+    setEditingPropField(field);
+    setEditingPropValue(current);
+  }
+
+  async function commitPropEdit() {
+    if (!editingPropId || !editingPropField) return;
+    const val = editingPropValue.trim();
+    if (editingPropField === 'name' && val) {
+      await onPropertyRename(editingPropId, val);
+    } else if (editingPropField === 'address') {
+      await onPropertyAddressEdit(editingPropId, val);
+    }
+    setEditingPropId(null);
+    setEditingPropField(null);
+    setEditingPropValue('');
+  }
+
+  function cancelPropEdit() {
+    setEditingPropId(null);
+    setEditingPropField(null);
+    setEditingPropValue('');
+  }
 
   // Load persisted sidebar width on mount
   useEffect(() => {
@@ -236,31 +271,114 @@ export default function Sidebar({
             <p className="text-xs" style={{ color: 'var(--muted)' }}>No properties yet</p>
           ) : (
             <div className="space-y-1">
-              {properties.map(prop => (
-                <button
-                  key={prop.id}
-                  onClick={() => onPropertySelect(prop)}
-                  className="w-full text-left p-2 rounded-md transition-colors hover:opacity-80"
-                  style={{
-                    backgroundColor: activePropertyId === prop.id ? 'rgba(59,130,246,0.1)' : 'var(--bg)',
-                    border: activePropertyId === prop.id ? '1px solid rgba(59,130,246,0.3)' : '1px solid transparent',
-                  }}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                      style={{ color: 'var(--accent)', flexShrink: 0 }}>
-                      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                      <polyline points="9 22 9 12 15 12 15 22" />
-                    </svg>
-                    <p className="text-xs font-medium truncate" style={{ color: 'var(--text)' }}>
-                      {prop.name}
-                    </p>
+              {properties.map(prop => {
+                const isActive = activePropertyId === prop.id;
+                const isEditingThis = editingPropId === prop.id;
+                return (
+                  <div key={prop.id}>
+                    <button
+                      onClick={() => onPropertySelect(prop)}
+                      className="w-full text-left p-2 rounded-md transition-colors hover:opacity-80"
+                      style={{
+                        backgroundColor: isActive ? 'rgba(59,130,246,0.1)' : 'var(--bg)',
+                        border: isActive ? '1px solid rgba(59,130,246,0.3)' : '1px solid transparent',
+                      }}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                          style={{ color: 'var(--accent)', flexShrink: 0 }}>
+                          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                          <polyline points="9 22 9 12 15 12 15 22" />
+                        </svg>
+                        <p className="text-xs font-medium truncate" style={{ color: 'var(--text)' }}>
+                          {prop.name}
+                        </p>
+                      </div>
+                      {prop.address && (
+                        <p className="text-xs ml-[18px] truncate" style={{ color: 'var(--muted)' }}>{prop.address}</p>
+                      )}
+                      <p className="text-xs ml-[18px]" style={{ color: 'var(--muted)' }}>
+                        {prop.statementCount} statement{prop.statementCount !== 1 ? 's' : ''}
+                      </p>
+                    </button>
+
+                    {/* Inline controls when this property is active */}
+                    {isActive && (
+                      <div className="mx-1 mb-1 rounded-b-md px-2 py-1.5 space-y-1.5"
+                        style={{ backgroundColor: 'rgba(59,130,246,0.05)', border: '1px solid rgba(59,130,246,0.15)', borderTop: 'none' }}>
+
+                        {isEditingThis && editingPropField === 'name' ? (
+                          <form className="flex gap-1" onSubmit={e => { e.preventDefault(); commitPropEdit(); }}>
+                            <input
+                              autoFocus
+                              value={editingPropValue}
+                              onChange={e => setEditingPropValue(e.target.value)}
+                              onBlur={commitPropEdit}
+                              placeholder="Property name"
+                              className="flex-1 text-xs bg-transparent outline-none border-b"
+                              style={{ color: 'var(--text)', borderColor: 'var(--accent)' }}
+                            />
+                            <button type="button" onClick={cancelPropEdit} className="text-xs hover:opacity-70" style={{ color: 'var(--muted)' }}>✕</button>
+                          </form>
+                        ) : isEditingThis && editingPropField === 'address' ? (
+                          <form className="flex gap-1" onSubmit={e => { e.preventDefault(); commitPropEdit(); }}>
+                            <input
+                              autoFocus
+                              value={editingPropValue}
+                              onChange={e => setEditingPropValue(e.target.value)}
+                              onBlur={commitPropEdit}
+                              placeholder="Property address"
+                              className="flex-1 text-xs bg-transparent outline-none border-b"
+                              style={{ color: 'var(--text)', borderColor: 'var(--accent)' }}
+                            />
+                            <button type="button" onClick={cancelPropEdit} className="text-xs hover:opacity-70" style={{ color: 'var(--muted)' }}>✕</button>
+                          </form>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => startPropEdit(prop.id, 'name', prop.name)}
+                              className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded hover:opacity-80 transition-opacity"
+                              style={{ color: 'var(--muted)' }}
+                              title="Rename property"
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                              Name
+                            </button>
+                            <button
+                              onClick={() => startPropEdit(prop.id, 'address', prop.address ?? '')}
+                              className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded hover:opacity-80 transition-opacity"
+                              style={{ color: 'var(--muted)' }}
+                              title="Edit address"
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                                <circle cx="12" cy="10" r="3" />
+                              </svg>
+                              Address
+                            </button>
+                            <button
+                              onClick={() => onPropertyDelete(prop.id)}
+                              className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded hover:opacity-80 transition-opacity ml-auto"
+                              style={{ color: 'var(--danger)' }}
+                              title="Delete property"
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                <path d="M10 11v6M14 11v6" />
+                              </svg>
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-xs ml-[18px]" style={{ color: 'var(--muted)' }}>
-                    {prop.statementCount} statement{prop.statementCount !== 1 ? 's' : ''}
-                  </p>
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

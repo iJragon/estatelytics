@@ -220,7 +220,7 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
       await runAnalyze(false);
       return;
     }
-    // Multi-file: process sequentially, stream summary only for the last file
+    // Multi-file: process in parallel for constant-time performance
     setIsAnalyzing(true);
     setAnalyzeError('');
     setDuplicateNotice('');
@@ -228,38 +228,45 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
     setChatHistory([]);
     setAnomalyExplanations({});
     setResolvedAnomalies(new Set());
+    setAnalyzeProgress({ current: queue.length, total: queue.length });
 
-    let lastResult: AnalysisResult | null = null;
-    for (let i = 0; i < queue.length; i++) {
-      setAnalyzeProgress({ current: i + 1, total: queue.length });
-      const file = queue[i];
+    const results = await Promise.all(queue.map(async file => {
       const formData = new FormData();
       formData.append('file', file);
       try {
         const res = await fetch('/api/analyze', { method: 'POST', body: formData });
-        if (!res.ok) continue;
-        const result: AnalysisResult = await res.json();
-        lastResult = result;
-        setHistory(prev => {
-          if (prev.find(h => h.fileHash === result.fileHash)) return prev;
-          const entry: HistoryEntry = {
+        if (!res.ok) return null;
+        return await res.json() as AnalysisResult;
+      } catch {
+        return null;
+      }
+    }));
+
+    const successful = results.filter((r): r is AnalysisResult => r !== null);
+
+    // Add all to history in one pass
+    setHistory(prev => {
+      let updated = [...prev];
+      for (const result of successful) {
+        if (!updated.find(h => h.fileHash === result.fileHash)) {
+          updated = [{
             id: result.fileHash,
             fileHash: result.fileHash,
             fileName: result.fileName,
             propertyName: result.statement.propertyName,
             period: result.statement.period,
             analyzedAt: result.analyzedAt,
-          };
-          return [entry, ...prev].slice(0, 20);
-        });
-      } catch {
-        // skip errors in batch
+          }, ...updated];
+        }
       }
-    }
+      return updated.slice(0, 20);
+    });
+
     setAnalyzeProgress(null);
     setIsAnalyzing(false);
 
-    // Show last result and stream summary
+    // Show last successful result and stream its summary
+    const lastResult = successful[successful.length - 1];
     if (lastResult) {
       selectedFileRef.current = queue[queue.length - 1];
       setAnalysis(lastResult);
@@ -267,7 +274,6 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
       loadToolsFromStorage(lastResult.fileHash);
       if (!lastResult.fromCache) {
         setSummaryStreaming(true);
-        const { buildFinancialContext } = await import('@/lib/agents/base');
         const context = buildFinancialContext(lastResult.statement, lastResult.ratios, lastResult.anomalies, lastResult.trends);
         let acc = '';
         try {
@@ -616,15 +622,29 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
     setPortfolioKeyMetrics(buildPortfolioKeyMetrics(updatedAnalyses, updatedStmts.map(s => s.yearLabel)));
   }
 
-  async function handlePropertyRename(newName: string) {
-    if (!propertyDetail) return;
-    await fetch(`/api/properties/${propertyDetail.id}`, {
+  async function handlePropertyRename(id: string, newName: string) {
+    await fetch(`/api/properties/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newName }),
     });
-    setPropertyDetail(prev => prev ? { ...prev, name: newName } : prev);
-    setProperties(prev => prev.map(p => p.id === propertyDetail.id ? { ...p, name: newName } : p));
+    setProperties(prev => prev.map(p => p.id === id ? { ...p, name: newName } : p));
+    if (propertyDetail?.id === id) {
+      setPropertyDetail(prev => prev ? { ...prev, name: newName } : prev);
+    }
+  }
+
+  async function handlePropertyAddressEdit(id: string, address: string) {
+    await fetch(`/api/properties/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: address.trim() || null }),
+    });
+    const normalized = address.trim() || undefined;
+    setProperties(prev => prev.map(p => p.id === id ? { ...p, address: normalized } : p));
+    if (propertyDetail?.id === id) {
+      setPropertyDetail(prev => prev ? { ...prev, address: normalized } : prev);
+    }
   }
 
   async function handleRenameStatement(stmtId: string, newLabel: string) {
@@ -664,6 +684,9 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
         onClearHistory={handleClearHistory}
         onPropertySelect={handlePropertySelect}
         onPropertyCreate={handlePropertyCreate}
+        onPropertyRename={handlePropertyRename}
+        onPropertyAddressEdit={handlePropertyAddressEdit}
+        onPropertyDelete={handlePropertyDelete}
         onSignOut={handleSignOut}
       />
 
@@ -690,7 +713,7 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
               onAnalyzeFile={handleAnalyzeFileForProperty}
               onRemoveStatement={handleRemoveStatement}
               onRenameStatement={handleRenameStatement}
-              onRenameProperty={handlePropertyRename}
+              onRenameProperty={(name) => handlePropertyRename(propertyDetail.id, name)}
               onDeleteProperty={() => handlePropertyDelete(propertyDetail.id)}
             />
           )

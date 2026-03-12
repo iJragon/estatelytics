@@ -133,22 +133,23 @@ export default function PropertyView({
       return;
     }
     setAddError('');
-    for (let i = 0; i < valid.length; i++) {
-      setUploadProgress({ current: i + 1, total: valid.length });
-      setUploadStatus(valid.length > 1 ? `Analyzing file ${i + 1} of ${valid.length}…` : `Analyzing ${valid[i].name}…`);
-      try {
-        const result = await onAnalyzeFile(valid[i]);
-        await onAddStatements([{ fileHash: result.fileHash, yearLabel: result.statement.period || '' }]);
-      } catch (err) {
-        setUploadStatus('');
-        setUploadProgress(null);
-        setAddError(err instanceof Error ? err.message : 'Failed to analyze file');
-        return;
-      }
+    setUploadStatus(valid.length === 1 ? `Analyzing ${valid[0].name}...` : `Analyzing ${valid.length} files...`);
+    setUploadProgress(valid.length > 1 ? { current: 0, total: valid.length } : null);
+    try {
+      // Analyze all files in parallel, then batch-add in one request to avoid stale state
+      const results = await Promise.all(valid.map(f => onAnalyzeFile(f)));
+      await onAddStatements(results.map(r => ({
+        fileHash: r.fileHash,
+        yearLabel: r.statement.period || '',
+      })));
+      setUploadStatus('');
+      setUploadProgress(null);
+      closeModal();
+    } catch (err) {
+      setUploadStatus('');
+      setUploadProgress(null);
+      setAddError(err instanceof Error ? err.message : 'Failed to analyze file');
     }
-    setUploadStatus('');
-    setUploadProgress(null);
-    closeModal();
   }
 
   const isEmpty = property.statements.length === 0;
@@ -528,7 +529,7 @@ export default function PropertyView({
                           <line x1="9" y1="15" x2="15" y2="15" />
                         </svg>
                         <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>Drop Excel file(s) here</p>
-                        <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>or click to browse — supports multiple files</p>
+                        <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>or click to browse (.xlsx, .xls, multiple files supported)</p>
                       </>
                     )}
                   </div>

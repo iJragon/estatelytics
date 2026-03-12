@@ -1,22 +1,22 @@
 'use client';
 
-import dynamic from 'next/dynamic';
 import type { AnalysisResult } from '@/lib/models/statement';
-
-const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
+import PlotlyChart from '@/components/charts/PlotlyChart';
+import { COLORS } from '@/components/charts/chart-builders';
 
 interface ExpenseBreakdownTabProps {
   analyses: AnalysisResult[];
   periods: string[];
 }
 
+// Colors aligned with the individual analysis Expense Breakdown donut (chart-builders.ts)
 const EXPENSE_CATEGORIES = [
-  { key: 'total_payroll', label: 'Payroll', color: '#3b82f6' },
-  { key: 'management_fees', label: 'Management Fees', color: '#10b981' },
-  { key: 'utilities', label: 'Utilities', color: '#f59e0b' },
-  { key: 'real_estate_taxes', label: 'Real Estate Taxes', color: '#ef4444' },
-  { key: 'insurance', label: 'Insurance', color: '#8b5cf6' },
-  { key: 'replacement_expense', label: 'Replacement Reserve', color: '#06b6d4' },
+  { key: 'total_payroll',       label: 'Payroll & Benefits',   color: COLORS.payroll },
+  { key: 'management_fees',     label: 'Management Fees',      color: COLORS.mgmt },
+  { key: 'utilities',           label: 'Utilities',            color: COLORS.utilities },
+  { key: 'real_estate_taxes',   label: 'Real Estate Taxes',    color: COLORS.taxes },
+  { key: 'insurance',           label: 'Insurance',            color: COLORS.insurance },
+  { key: 'replacement_expense', label: 'Replacement Reserve',  color: COLORS.other },
 ];
 
 function formatDollar(val: number | null | undefined): string {
@@ -32,49 +32,37 @@ export default function ExpenseBreakdownTab({ analyses, periods }: ExpenseBreakd
     return <p className="text-sm" style={{ color: 'var(--muted)' }}>No statements available.</p>;
   }
 
-  const traces = EXPENSE_CATEGORIES.map(cat => ({
+  const traces: Plotly.Data[] = EXPENSE_CATEGORIES.map(cat => ({
     name: cat.label,
     x: periods,
     y: analyses.map(a => {
       const val = a.statement.keyFigures[cat.key]?.annualTotal ?? null;
       return val !== null ? Math.abs(val) : null;
     }),
-    type: 'bar' as const,
+    type: 'bar',
     marker: { color: cat.color },
     hovertemplate: `%{x}<br>${cat.label}: $%{y:,.0f}<extra></extra>`,
-  }));
+  } as Plotly.Data));
 
-  const layout = {
-    barmode: 'stack' as const,
-    title: { text: 'Annual Expense Breakdown', font: { size: 13, color: 'var(--text)' as string } },
-    paper_bgcolor: 'transparent',
-    plot_bgcolor: 'transparent',
-    font: { color: 'var(--text)' as string, size: 11 },
-    margin: { t: 40, r: 20, b: 60, l: 80 },
-    xaxis: { gridcolor: 'rgba(128,128,128,0.15)' },
-    yaxis: {
-      gridcolor: 'rgba(128,128,128,0.15)',
-      tickprefix: '$',
-      tickformat: ',.0f',
-    },
-    legend: { orientation: 'h' as const, y: -0.25 },
-  };
-
-  // Also render a summary table
   const totalOpex = analyses.map(a => a.statement.keyFigures['total_operating_expenses']?.annualTotal ?? null);
 
   return (
     <div className="space-y-6">
       <div className="card">
-        <Plot
+        <PlotlyChart
           data={traces}
-          layout={layout}
+          layout={{
+            title: { text: 'Annual Expense Breakdown' },
+            barmode: 'stack',
+            yaxis: { tickformat: '$,.0f' },
+            hovermode: 'x unified',
+          }}
           config={{ displayModeBar: false, responsive: true }}
-          style={{ width: '100%', height: 380 }}
+          style={{ height: 380 }}
         />
       </div>
 
-      {/* Expense table */}
+      {/* Expense detail table */}
       <div className="card overflow-x-auto">
         <h3 className="font-semibold text-sm mb-4" style={{ color: 'var(--text)' }}>Expense Detail by Period</h3>
         <table className="w-full text-xs">
