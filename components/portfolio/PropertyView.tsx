@@ -64,6 +64,7 @@ export default function PropertyView({
   const [editingLabel, setEditingLabel] = useState('');
   const [editingPropertyName, setEditingPropertyName] = useState(false);
   const [propertyNameDraft, setPropertyNameDraft] = useState('');
+  const [removeStmtConfirmId, setRemoveStmtConfirmId] = useState<string | null>(null);
 
   // Add modal state
   const [modalTab, setModalTab] = useState<'history' | 'upload'>('history');
@@ -275,7 +276,7 @@ export default function PropertyView({
                     </button>
                     {/* Remove */}
                     <button
-                      onClick={() => onRemoveStatement(stmt.id)}
+                      onClick={() => setRemoveStmtConfirmId(stmt.id)}
                       className="ml-0.5 opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity"
                       title="Remove"
                     >
@@ -575,6 +576,39 @@ export default function PropertyView({
           </div>
         </div>
       )}
+
+      {/* Remove Statement Confirmation */}
+      {removeStmtConfirmId && (() => {
+        const stmt = property.statements.find(s => s.id === removeStmtConfirmId);
+        const label = stmt ? (stmt.yearLabel || stmt.period) : 'this statement';
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+            <div className="rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl" style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <h3 className="font-semibold text-sm mb-2" style={{ color: 'var(--text)' }}>Remove Statement?</h3>
+              <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>
+                Remove <strong>{label}</strong> from <strong>{property.name}</strong>?
+                The underlying analysis will remain in your History — only the link to this property is removed.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setRemoveStmtConfirmId(null)}
+                  className="px-4 py-2 text-sm rounded-md border transition-colors hover:opacity-80"
+                  style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { setRemoveStmtConfirmId(null); onRemoveStatement(removeStmtConfirmId); }}
+                  className="px-4 py-2 text-sm rounded-md transition-colors hover:opacity-80"
+                  style={{ backgroundColor: 'var(--danger)', color: 'white' }}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Delete Property Confirmation */}
       {showDeleteConfirm && (

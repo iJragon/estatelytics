@@ -591,7 +591,7 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
     setPortfolioKeyMetrics(buildPortfolioKeyMetrics(updatedAnalyses, updatedStmts.map(s => s.yearLabel)));
   }
 
-  // Analyze a file for a property context — does NOT add to history
+  // Analyze a file for a property context — adds to history automatically
   async function handleAnalyzeFileForProperty(file: File): Promise<AnalysisResult> {
     const formData = new FormData();
     formData.append('file', file);
@@ -600,7 +600,21 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
       const err = await res.json().catch(() => ({ error: 'Analysis failed' }));
       throw new Error(err.error || 'Analysis failed');
     }
-    return res.json();
+    const result: AnalysisResult = await res.json();
+    // Add to history immediately so it appears without a page refresh
+    setHistory(prev => {
+      if (prev.find(h => h.fileHash === result.fileHash)) return prev;
+      const newEntry: HistoryEntry = {
+        id: result.fileHash,
+        fileHash: result.fileHash,
+        fileName: result.fileName,
+        propertyName: result.statement.propertyName,
+        period: result.statement.period,
+        analyzedAt: result.analyzedAt,
+      };
+      return [newEntry, ...prev].slice(0, 20);
+    });
+    return result;
   }
 
   async function handleRemoveStatement(stmtId: string) {

@@ -92,6 +92,12 @@ export async function POST(request: NextRequest) {
 
     // Parse and analyze
     const statement = await parseExcel(buffer);
+
+    // Fallback: if AI couldn't extract a meaningful property name, use the filename
+    if (!statement.propertyName || /^unknown/i.test(statement.propertyName.trim())) {
+      statement.propertyName = file.name.replace(/\.(xlsx|xls)$/i, '');
+    }
+
     const ratios = calculateRatios(statement);
     const anomalies = detectAnomalies(statement);
     const trends = analyzeTrends(statement);

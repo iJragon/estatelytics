@@ -75,6 +75,8 @@ export default function Sidebar({
   const [editingPropId, setEditingPropId] = useState<string | null>(null);
   const [editingPropField, setEditingPropField] = useState<'name' | 'address' | null>(null);
   const [editingPropValue, setEditingPropValue] = useState('');
+  // Confirmation modal
+  const [confirm, setConfirm] = useState<{ title: string; body: string; action: () => void } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sidebarWidthRef = useRef(DEFAULT_WIDTH);
 
@@ -362,7 +364,11 @@ export default function Sidebar({
                               Address
                             </button>
                             <button
-                              onClick={() => onPropertyDelete(prop.id)}
+                              onClick={() => setConfirm({
+                                title: 'Delete Property?',
+                                body: `This will permanently delete "${prop.name}"${prop.statementCount > 0 ? ` and remove its ${prop.statementCount} statement link${prop.statementCount !== 1 ? 's' : ''}` : ''}. Your underlying analysis data will remain in History. This cannot be undone.`,
+                                action: () => onPropertyDelete(prop.id),
+                              })}
                               className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded hover:opacity-80 transition-opacity ml-auto"
                               style={{ color: 'var(--danger)' }}
                               title="Delete property"
@@ -473,7 +479,11 @@ export default function Sidebar({
             </p>
             {history.length > 0 && (
               <button
-                onClick={onClearHistory}
+                onClick={() => setConfirm({
+                  title: 'Clear All History?',
+                  body: `This will permanently remove all ${history.length} analysis entr${history.length !== 1 ? 'ies' : 'y'} from your history. This cannot be undone.`,
+                  action: onClearHistory,
+                })}
                 className="text-xs hover:opacity-80 transition-opacity"
                 style={{ color: 'var(--muted)' }}
               >
@@ -523,7 +533,7 @@ export default function Sidebar({
                         className="flex-1 text-left text-xs font-medium truncate min-w-0 hover:opacity-70 transition-opacity"
                         style={{ color: 'var(--text)' }}
                       >
-                        {entry.propertyName || entry.fileName}
+                        {entry.propertyName || entry.fileName}{entry.period ? ` (${entry.period})` : ''}
                       </button>
                     )}
                     {editingHistoryId !== entry.id && (
@@ -540,7 +550,11 @@ export default function Sidebar({
                       </button>
                     )}
                     <button
-                      onClick={() => onHistoryDelete(entry.id)}
+                      onClick={() => setConfirm({
+                        title: 'Remove from History?',
+                        body: `Remove "${entry.propertyName || entry.fileName}"${entry.period ? ` (${entry.period})` : ''} from your history? This cannot be undone.`,
+                        action: () => onHistoryDelete(entry.id),
+                      })}
                       className="flex-shrink-0 opacity-0 group-hover:opacity-50 hover:opacity-100 transition-opacity p-0.5"
                       style={{ color: 'var(--muted)' }}
                       title="Delete"
@@ -568,6 +582,38 @@ export default function Sidebar({
           )}
         </div>
       </div>
+
+      {/* Confirmation modal */}
+      {confirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="rounded-xl p-5 max-w-sm w-full mx-4 shadow-xl" style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>{confirm.title}</h3>
+            </div>
+            <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>{confirm.body}</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirm(null)}
+                className="px-3 py-1.5 text-xs rounded-md border transition-colors hover:opacity-80"
+                style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { confirm.action(); setConfirm(null); }}
+                className="px-3 py-1.5 text-xs rounded-md transition-colors hover:opacity-80"
+                style={{ backgroundColor: 'var(--danger)', color: 'white' }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer: theme toggle + user / sign out */}
       <div className="p-4 border-t space-y-3" style={{ borderColor: 'var(--border)' }}>
