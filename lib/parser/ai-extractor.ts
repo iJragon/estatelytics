@@ -32,7 +32,12 @@ async function callWithRetry(
       });
       return response.choices[0]?.message?.content ?? '';
     } catch (err) {
-      if (!isRateLimitError(err) || isDailyTokenCap(err) || attempt === maxRetries) throw err;
+      if (!isRateLimitError(err) || attempt === maxRetries) throw err;
+      if (isDailyTokenCap(err)) {
+        const waitMatch = err instanceof Error ? err.message.match(/try again in ([^.]+)/i) : null;
+        const waitHint = waitMatch ? ` Try again in ${waitMatch[1]}.` : ' Try again in a few hours.';
+        throw new Error(`Daily analysis limit reached.${waitHint}`);
+      }
       const delay = Math.pow(2, attempt) * 1000; // 1 s, 2 s, 4 s, 8 s
       console.warn(`[ai-extractor] Rate limited — retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
       await new Promise(r => setTimeout(r, delay));
