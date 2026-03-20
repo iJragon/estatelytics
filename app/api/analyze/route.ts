@@ -98,6 +98,21 @@ export async function POST(request: NextRequest) {
       statement.propertyName = file.name.replace(/\.(xlsx|xls)$/i, '');
     }
 
+    // Guard: if extraction produced no key figures or no period, the AI call failed
+    // (rate-limited after all retries, or malformed response). Do not cache — let
+    // the client retry by re-uploading the file.
+    const extractionFailed =
+      !statement.period ||
+      /^unknown/i.test(statement.period.trim()) ||
+      Object.keys(statement.keyFigures).length === 0;
+
+    if (extractionFailed) {
+      return NextResponse.json(
+        { error: 'AI extraction returned incomplete results. Please try uploading this file again.' },
+        { status: 422 },
+      );
+    }
+
     const ratios = calculateRatios(statement);
     const anomalies = detectAnomalies(statement);
     const trends = analyzeTrends(statement);

@@ -5,6 +5,36 @@ import type { LineItem, ParserReportEntry } from '../models/statement';
 // not a streaming chat, so accuracy matters more than speed.
 const EXTRACTION_MODEL = 'llama-3.3-70b-versatile';
 
+function isRateLimitError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  if ('status' in err && (err as { status: number }).status === 429) return true;
+  return err.message.toLowerCase().includes('rate limit') || err.message.includes('429');
+}
+
+async function callWithRetry(
+  client: Groq,
+  prompt: string,
+  maxRetries = 4,
+): Promise<string> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await client.chat.completions.create({
+        model: EXTRACTION_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.05,
+        max_tokens: 800,
+      });
+      return response.choices[0]?.message?.content ?? '';
+    } catch (err) {
+      if (!isRateLimitError(err) || attempt === maxRetries) throw err;
+      const delay = Math.pow(2, attempt) * 1000; // 1 s, 2 s, 4 s, 8 s
+      console.warn(`[ai-extractor] Rate limited — retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
 export async function extractKeyFiguresWithAI(
   allRows: LineItem[],
   headerText: string,
@@ -119,14 +149,7 @@ Respond with ONLY a valid JSON object. No markdown fences, no explanation, no ex
 }`;
 
   try {
-    const response = await client.chat.completions.create({
-      model: EXTRACTION_MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.05, // near-zero temperature for deterministic structured extraction
-      max_tokens: 800,
-    });
-
-    const text = response.choices[0]?.message?.content ?? '';
+    const text = await callWithRetry(client, prompt);
     console.log('[ai-extractor] Raw response:', text.slice(0, 300));
 
     // Strip any accidental markdown fences before parsing
@@ -177,6 +200,6 @@ Respond with ONLY a valid JSON object. No markdown fences, no explanation, no ex
     };
   } catch (err) {
     console.error('[ai-extractor] Extraction failed:', err);
-    return { keyFigures: {}, parserReport: [], propertyName: 'Unknown Property', period: 'Unknown Period', bookType: 'Accrual' };
+    throw err; // Let the caller (route.ts) handle this — do NOT cache a failed result
   }
 }
