@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { AnalysisResult } from '@/lib/models/statement';
+import { migrateStatement } from '@/lib/models/statement';
 import type { PropertyStatement } from '@/lib/models/portfolio';
 
 // POST /api/properties/[id]/statements — add one or more statements to a property
@@ -74,7 +75,7 @@ export async function POST(
           addedAt: linkData.added_at,
         },
         analysis: {
-          statement: analysis.statement_data,
+          statement: migrateStatement(analysis.statement_data),
           ratios: analysis.ratios_data,
           anomalies: analysis.anomalies_data,
           trends: analysis.trends_data,

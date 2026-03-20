@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { AnalysisResult } from '@/lib/models/statement';
+import { migrateStatement } from '@/lib/models/statement';
 import type { PropertyDetail, PropertyStatement } from '@/lib/models/portfolio';
 
 // GET /api/properties/[id] — returns property detail with statements and analyses
@@ -85,7 +86,7 @@ export async function GET(
     });
 
     analyses.push({
-      statement: a.statement_data,
+      statement: migrateStatement(a.statement_data),
       ratios: a.ratios_data,
       anomalies: a.anomalies_data,
       trends: a.trends_data,
