@@ -62,8 +62,8 @@ export default function SignupPage() {
 
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>Statement Utility</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>Financial P&L Analysis Platform</p>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>Estatelytics</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>AI-powered financial statement analysis</p>
         </div>
 
         <div className="card">

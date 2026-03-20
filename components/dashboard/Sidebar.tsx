@@ -205,8 +205,8 @@ export default function Sidebar({
 
       {/* Header */}
       <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
-        <h1 className="text-lg font-bold" style={{ color: 'var(--text)' }}>Statement Utility</h1>
-        <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>P&L Analysis Platform</p>
+        <h1 className="text-lg font-bold" style={{ color: 'var(--text)' }}>Estatelytics</h1>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>AI-powered financial analysis</p>
       </div>
 
       {/* Scrollable body */}

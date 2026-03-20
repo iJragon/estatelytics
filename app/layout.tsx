@@ -6,8 +6,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Statement Utility',
-  description: 'Financial P&L Statement Analyzer',
+  title: 'Estatelytics',
+  description: 'AI-powered financial statement analysis',
 };
 
 export default function RootLayout({

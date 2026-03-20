@@ -834,7 +834,7 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
                 <div className="flex flex-col items-center justify-center h-full gap-6 text-center">
                   <div>
                     <h2 className="text-xl font-semibold mb-2" style={{ color: 'var(--text)' }}>
-                      Welcome to Statement Utility
+                      Welcome to Estatelytics
                     </h2>
                     <p className="max-w-md" style={{ color: 'var(--muted)' }}>
                       Upload an Excel P&L statement using the sidebar to get started. You&apos;ll receive
