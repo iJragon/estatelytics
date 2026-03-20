@@ -145,8 +145,10 @@ export default function Sidebar({
   const handleFiles = useCallback((files: FileList | File[]) => {
     const arr = Array.from(files).filter(f => f.name.endsWith('.xlsx') || f.name.endsWith('.xls'));
     if (arr.length === 0) return;
-    setQueuedFiles(arr);
-    onFilesSelect(arr);
+    // Standalone upload only accepts one file at a time
+    const single = [arr[0]];
+    setQueuedFiles(single);
+    onFilesSelect(single);
   }, [onFilesSelect]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -416,46 +418,24 @@ export default function Sidebar({
 
             {hasFiles ? (
               <>
-                {queuedFiles.length === 1 ? (
-                  <p className="text-xs mt-2 font-medium truncate max-w-full text-center" style={{ color: 'var(--accent)' }}>
-                    {queuedFiles[0].name}
-                  </p>
-                ) : (
-                  <p className="text-xs mt-2 font-medium text-center" style={{ color: 'var(--accent)' }}>
-                    {queuedFiles.length} files queued
-                  </p>
-                )}
+                <p className="text-xs mt-2 font-medium truncate max-w-full text-center" style={{ color: 'var(--accent)' }}>
+                  {queuedFiles[0].name}
+                </p>
                 <p className="text-xs mt-1 text-center" style={{ color: 'var(--muted)' }}>
                   Drop or click to replace
                 </p>
               </>
             ) : (
               <p className="text-xs mt-2 text-center" style={{ color: 'var(--muted)' }}>
-                Drop Excel file(s) or click to browse
+                Drop an Excel file or click to browse
               </p>
             )}
           </div>
-
-          {queuedFiles.length > 1 && (
-            <div className="mt-2 space-y-0.5">
-              {queuedFiles.map((f, i) => (
-                <div key={i} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs"
-                  style={{ backgroundColor: 'var(--bg)', color: 'var(--muted)' }}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                  </svg>
-                  <span className="truncate">{f.name}</span>
-                </div>
-              ))}
-            </div>
-          )}
 
           <input
             ref={fileInputRef}
             type="file"
             accept=".xlsx,.xls"
-            multiple
             className="hidden"
             onChange={handleInputChange}
           />
@@ -465,11 +445,7 @@ export default function Sidebar({
             disabled={!canAnalyze}
             className="btn-primary w-full mt-3"
           >
-            {isAnalyzing
-              ? progressLabel
-              : queuedFiles.length > 1
-                ? `Analyze ${queuedFiles.length} Files`
-                : 'Analyze'}
+            {isAnalyzing ? progressLabel : 'Analyze'}
           </button>
 
           {(hasFiles || hasAnalysis) && !isAnalyzing && (
