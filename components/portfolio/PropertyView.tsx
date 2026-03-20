@@ -120,6 +120,7 @@ export default function PropertyView({
       }));
       await onAddStatements(statements);
       closeModal();
+      onGenerateSummary();
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'Failed to add statements');
     } finally {
@@ -135,10 +136,18 @@ export default function PropertyView({
     }
     setAddError('');
     setUploadStatus(valid.length === 1 ? `Analyzing ${valid[0].name}...` : `Analyzing ${valid.length} files...`);
-    setUploadProgress(valid.length > 1 ? { current: 0, total: valid.length } : null);
+
+    let completed = 0;
+    if (valid.length > 1) setUploadProgress({ current: 0, total: valid.length });
+
     try {
-      // Analyze all files in parallel, then batch-add in one request to avoid stale state
-      const results = await Promise.all(valid.map(f => onAnalyzeFile(f)));
+      // Analyze in parallel; increment progress counter as each file completes
+      const results = await Promise.all(valid.map(async f => {
+        const result = await onAnalyzeFile(f);
+        completed++;
+        setUploadProgress(valid.length > 1 ? { current: completed, total: valid.length } : null);
+        return result;
+      }));
       await onAddStatements(results.map(r => ({
         fileHash: r.fileHash,
         yearLabel: r.statement.period || '',
@@ -146,6 +155,7 @@ export default function PropertyView({
       setUploadStatus('');
       setUploadProgress(null);
       closeModal();
+      onGenerateSummary();
     } catch (err) {
       setUploadStatus('');
       setUploadProgress(null);
