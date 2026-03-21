@@ -36,7 +36,7 @@ const MAIN_TABS = [
   { id: 'flags', label: 'Cross-Year Flags' },
 ];
 
-const CHAT_TAB = { id: 'chat', label: 'Ask AI' };
+const CHAT_TAB = { id: 'chat', label: 'Chat' };
 
 function formatDate(iso: string) {
   try {
