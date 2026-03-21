@@ -701,6 +701,7 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
         onPropertyRename={handlePropertyRename}
         onPropertyAddressEdit={handlePropertyAddressEdit}
         onPropertyDelete={handlePropertyDelete}
+        onNavigateHome={() => { setActiveView('analysis'); setActivePropertyId(undefined); setAnalysis(null); }}
         onSignOut={handleSignOut}
       />
 

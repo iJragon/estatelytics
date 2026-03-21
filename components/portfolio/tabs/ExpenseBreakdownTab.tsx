@@ -49,13 +49,15 @@ export default function ExpenseBreakdownTab({ analyses, periods }: ExpenseBreakd
   return (
     <div className="space-y-6">
       <div className="card">
+        <h3 className="font-semibold text-sm mb-1" style={{ color: 'var(--text)' }}>Annual Expense Breakdown</h3>
+        <p className="text-xs mb-3" style={{ color: 'var(--muted)' }}>Distribution of operating costs by category across periods</p>
         <PlotlyChart
           data={traces}
           layout={{
-            title: { text: 'Annual Expense Breakdown' },
             barmode: 'stack',
             yaxis: { tickformat: '$,.0f' },
             hovermode: 'x unified',
+            margin: { t: 8, b: 40, l: 60, r: 16 },
           }}
           config={{ displayModeBar: false, responsive: true }}
           style={{ height: 380 }}

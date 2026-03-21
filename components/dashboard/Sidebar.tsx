@@ -29,6 +29,7 @@ interface SidebarProps {
   onPropertyRename: (id: string, name: string) => Promise<void>;
   onPropertyAddressEdit: (id: string, address: string) => Promise<void>;
   onPropertyDelete: (id: string) => void;
+  onNavigateHome: () => void;
   onSignOut: () => void;
 }
 
@@ -60,6 +61,7 @@ export default function Sidebar({
   onPropertyRename,
   onPropertyAddressEdit,
   onPropertyDelete,
+  onNavigateHome,
   onSignOut,
 }: SidebarProps) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_WIDTH);
@@ -205,7 +207,11 @@ export default function Sidebar({
 
       {/* Header */}
       <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
-        <h1 className="text-lg font-bold" style={{ color: 'var(--text)' }}>Estatelytics</h1>
+        <h1
+          className="text-lg font-bold cursor-pointer hover:opacity-70 transition-opacity"
+          style={{ color: 'var(--text)' }}
+          onClick={onNavigateHome}
+        >Estatelytics</h1>
         <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>AI-powered financial analysis</p>
       </div>
 
