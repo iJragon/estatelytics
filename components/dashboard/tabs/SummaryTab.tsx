@@ -285,6 +285,43 @@ export default function SummaryTab({ analysis, summaryText, summaryStreaming, on
         </div>
       )}
 
+      {/* ── Key Performance Indicators ─────────────────────────────────────── */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
+          Key Performance Indicators
+        </p>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatTile
+            label="NOI Margin"
+            tooltip="NOI Margin"
+            value={noiMargin !== null ? `${noiMargin.toFixed(1)}%` : 'N/A'}
+            sub="Target: 45%+"
+            status={noiStatus}
+          />
+          <StatTile
+            label="Operating Expense Ratio"
+            tooltip="OER (Operating Expense Ratio)"
+            value={oer !== null ? `${oer.toFixed(1)}%` : 'N/A'}
+            sub="Target: below 55%"
+            status={oerStatus}
+          />
+          <StatTile
+            label="Vacancy Rate"
+            tooltip="Vacancy Rate"
+            value={vacancyRate !== null ? `${vacancyRate.toFixed(1)}%` : 'N/A'}
+            sub="Target: below 7%"
+            status={vacStatus}
+          />
+          <StatTile
+            label="Debt Service Coverage"
+            tooltip="DSCR (Debt Service Coverage Ratio)"
+            value={dscr !== null ? `${dscr.toFixed(2)}x` : 'N/A'}
+            sub="Lender min: 1.25x"
+            status={dscrStatus}
+          />
+        </div>
+      </div>
+
       {/* ── Income Statement Cascade ───────────────────────────────────────── */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
@@ -369,43 +406,6 @@ export default function SummaryTab({ analysis, summaryText, summaryStreaming, on
 
             </tbody>
           </table>
-        </div>
-      </div>
-
-      {/* ── Key Performance Indicators ─────────────────────────────────────── */}
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
-          Key Performance Indicators
-        </p>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatTile
-            label="NOI Margin"
-            tooltip="NOI Margin"
-            value={noiMargin !== null ? `${noiMargin.toFixed(1)}%` : 'N/A'}
-            sub="Target: 45%+"
-            status={noiStatus}
-          />
-          <StatTile
-            label="Operating Expense Ratio"
-            tooltip="OER (Operating Expense Ratio)"
-            value={oer !== null ? `${oer.toFixed(1)}%` : 'N/A'}
-            sub="Target: below 55%"
-            status={oerStatus}
-          />
-          <StatTile
-            label="Vacancy Rate"
-            tooltip="Vacancy Rate"
-            value={vacancyRate !== null ? `${vacancyRate.toFixed(1)}%` : 'N/A'}
-            sub="Target: below 7%"
-            status={vacStatus}
-          />
-          <StatTile
-            label="Debt Service Coverage"
-            tooltip="DSCR (Debt Service Coverage Ratio)"
-            value={dscr !== null ? `${dscr.toFixed(2)}x` : 'N/A'}
-            sub="Lender min: 1.25x"
-            status={dscrStatus}
-          />
         </div>
       </div>
 
