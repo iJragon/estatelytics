@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { getGroqClient, DEFAULT_MODEL } from '@/lib/agents/base';
 import type { ChatMessage } from '@/lib/agents/chat-agent';
 
+const CHAT_HISTORY_WINDOW = 8;
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -21,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     const groq = getGroqClient();
 
-    const recentHistory = history.slice(-8);
+    const recentHistory = history.slice(-CHAT_HISTORY_WINDOW);
 
     const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       {

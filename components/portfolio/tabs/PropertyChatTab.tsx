@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import type { AnalysisResult } from '@/lib/models/statement';
+import { formatDollar } from '@/lib/utils/format';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -12,14 +13,6 @@ interface PropertyChatTabProps {
   propertyName: string;
   analyses: AnalysisResult[];
   periods: string[];
-}
-
-function fmt$(val: number): string {
-  const abs = Math.abs(val);
-  const sign = val < 0 ? '-' : '';
-  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}K`;
-  return `${sign}$${abs.toFixed(0)}`;
 }
 
 function buildContext(propertyName: string, analyses: AnalysisResult[], periods: string[]): string {
@@ -43,7 +36,7 @@ function buildContext(propertyName: string, analyses: AnalysisResult[], periods:
     for (const key of keys) {
       const row = kf[key];
       if (row?.annualTotal !== undefined && row.annualTotal !== null) {
-        lines.push(`  ${row.label}: ${fmt$(row.annualTotal)}`);
+        lines.push(`  ${row.label}: ${formatDollar(row.annualTotal)}`);
       }
     }
 

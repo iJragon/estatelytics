@@ -1,19 +1,12 @@
 import Groq from 'groq-sdk';
 import type { FinancialStatement, RatioReport, Anomaly, TrendReport } from '../models/statement';
+import { formatDollar } from '../utils/format';
 
 export function getGroqClient(): Groq {
   return new Groq({ apiKey: process.env.GROQ_API_KEY });
 }
 
 export const DEFAULT_MODEL = 'llama-3.1-8b-instant';
-
-function formatDollar(val: number | null | undefined): string {
-  if (val === null || val === undefined) return 'N/A';
-  const abs = Math.abs(val);
-  if (abs >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `$${(val / 1_000).toFixed(1)}K`;
-  return `$${val.toFixed(0)}`;
-}
 
 function formatRatioValue(value: number | null, unit: string): string {
   if (value === null) return 'N/A';

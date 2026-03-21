@@ -11,7 +11,15 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Verify the property_statement belongs to the user via the property
+  // Verify ownership: ensure property belongs to this user before mutating
+  const { data: prop } = await supabase
+    .from('properties')
+    .select('id')
+    .eq('id', propertyId)
+    .eq('user_id', user.id)
+    .single();
+  if (!prop) return NextResponse.json({ error: 'Property not found' }, { status: 404 });
+
   const { error } = await supabase
     .from('property_statements')
     .delete()
@@ -31,6 +39,15 @@ export async function PATCH(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Verify ownership: ensure property belongs to this user before mutating
+  const { data: prop } = await supabase
+    .from('properties')
+    .select('id')
+    .eq('id', propertyId)
+    .eq('user_id', user.id)
+    .single();
+  if (!prop) return NextResponse.json({ error: 'Property not found' }, { status: 404 });
 
   const { yearLabel } = await request.json() as { yearLabel: string };
 

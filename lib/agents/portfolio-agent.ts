@@ -1,21 +1,9 @@
 import { getGroqClient } from './base';
 import type { AnalysisResult } from '../models/statement';
 import type { CrossYearFlag, PortfolioKeyMetric } from '../models/portfolio';
+import { formatDollar, pctChange } from '../utils/format';
 
 const PORTFOLIO_MODEL = 'llama-3.3-70b-versatile';
-
-function formatDollar(val: number | null | undefined): string {
-  if (val === null || val === undefined) return 'N/A';
-  const abs = Math.abs(val);
-  if (abs >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `$${(val / 1_000).toFixed(1)}K`;
-  return `$${val.toFixed(0)}`;
-}
-
-function pctChange(from: number | null, to: number | null): number | null {
-  if (from === null || to === null || from === 0) return null;
-  return ((to - from) / Math.abs(from)) * 100;
-}
 
 export function buildPortfolioContext(
   propertyName: string,

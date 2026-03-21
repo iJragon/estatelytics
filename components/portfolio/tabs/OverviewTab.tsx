@@ -4,6 +4,7 @@ import type React from 'react';
 import type { PropertyDetail, CrossYearFlag } from '@/lib/models/portfolio';
 import type { AnalysisResult } from '@/lib/models/statement';
 import { downloadPortfolioPDF } from '@/lib/export/report-html';
+import { formatDollar, pctChange } from '@/lib/utils/format';
 
 interface OverviewTabProps {
   property: PropertyDetail;
@@ -16,27 +17,15 @@ interface OverviewTabProps {
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
-function fmt$(val: number | null | undefined): string {
-  if (val === null || val === undefined) return 'N/A';
-  const abs = Math.abs(val);
-  const sign = val < 0 ? '-' : '';
-  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000)     return `${sign}$${(abs / 1_000).toFixed(1)}K`;
-  return `${sign}$${abs.toFixed(0)}`;
-}
+// formatDollar and pctChange imported from @/lib/utils/format
 
 function fmtPct(val: number | null | undefined): string {
   if (val === null || val === undefined) return 'N/A';
   return `${val.toFixed(1)}%`;
 }
 
-function pctChangeNum(prev: number | null, curr: number | null): number | null {
-  if (prev === null || curr === null || prev === 0) return null;
-  return ((curr - prev) / Math.abs(prev)) * 100;
-}
-
-function pctChangeStr(prev: number | null, curr: number | null): string | null {
-  const c = pctChangeNum(prev, curr);
+function fmtPctChange(prev: number | null, curr: number | null): string | null {
+  const c = pctChange(prev, curr);
   return c !== null ? `${c >= 0 ? '+' : ''}${c.toFixed(1)}%` : null;
 }
 
@@ -293,13 +282,13 @@ export default function OverviewTab({
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatTile
             label="Net Operating Income"
-            value={fmt$(latestNoi)}
+            value={formatDollar(latestNoi)}
             sub="Annual NOI"
             status={latestNoi !== null && latestNoi >= 0 ? 'good' : latestNoi !== null ? 'bad' : 'neutral'}
           />
           <StatTile
             label="Total Revenue"
-            value={fmt$(latestRev)}
+            value={formatDollar(latestRev)}
             sub="Annual revenue"
           />
           <StatTile
@@ -328,7 +317,7 @@ export default function OverviewTab({
               Best Period (NOI)
             </p>
             <p className="text-base font-bold" style={{ color: 'var(--text)' }}>{bestPeriod.period}</p>
-            <p className="text-sm font-mono" style={{ color: 'var(--success)' }}>{fmt$(bestPeriod.noi)}</p>
+            <p className="text-sm font-mono" style={{ color: 'var(--success)' }}>{formatDollar(bestPeriod.noi)}</p>
           </div>
           <div
             className="rounded-xl px-4 py-3 border"
@@ -338,7 +327,7 @@ export default function OverviewTab({
               Weakest Period (NOI)
             </p>
             <p className="text-base font-bold" style={{ color: 'var(--text)' }}>{worstPeriod.period}</p>
-            <p className="text-sm font-mono" style={{ color: 'var(--danger)' }}>{fmt$(worstPeriod.noi)}</p>
+            <p className="text-sm font-mono" style={{ color: 'var(--danger)' }}>{formatDollar(worstPeriod.noi)}</p>
           </div>
         </div>
       )}
@@ -404,8 +393,8 @@ export default function OverviewTab({
                   const firstVal = values.find(v => v !== null) ?? null;
                   const lastVal  = values[values.length - 1];
                   const prevVal  = values.length >= 2 ? values[values.length - 2] : null;
-                  const chgStr   = pctChangeStr(prevVal, lastVal);
-                  const chgNum   = pctChangeNum(prevVal, lastVal);
+                  const chgStr   = fmtPctChange(prevVal, lastVal);
+                  const chgNum   = pctChange(prevVal, lastVal);
                   const cagr     = showCagr ? calcCagr(firstVal, lastVal, nPeriods) : null;
 
                   // For deduction rows (expenses), good = going down
@@ -427,7 +416,7 @@ export default function OverviewTab({
                         const display = row.isDeduction && val !== null ? (val > 0 ? -val : val) : val;
                         const isNeg = display !== null && display < 0;
                         const prevRaw = i > 0 ? values[i - 1] : null;
-                        const chgVsPrior = pctChangeNum(prevRaw, val);
+                        const chgVsPrior = pctChange(prevRaw, val);
                         const arrow = i > 0 && chgVsPrior !== null ? (chgVsPrior > 0 ? '▲' : '▼') : '';
                         const arrowGood = row.higherIsBad ? (chgVsPrior !== null && chgVsPrior < 0) : (chgVsPrior !== null && chgVsPrior > 0);
 
@@ -443,7 +432,7 @@ export default function OverviewTab({
                               whiteSpace: 'nowrap',
                             }}
                           >
-                            {display !== null ? fmt$(display) : 'N/A'}
+                            {display !== null ? formatDollar(display) : 'N/A'}
                             {arrow && (
                               <span className="ml-1 text-[10px]" style={{ color: arrowGood ? 'var(--success)' : 'var(--danger)' }}>
                                 {arrow}
@@ -482,8 +471,8 @@ export default function OverviewTab({
                 {ratioRows.map(row => {
                   const lastVal = row.values[row.values.length - 1];
                   const prevVal = row.values.length >= 2 ? row.values[row.values.length - 2] : null;
-                  const chgNum  = pctChangeNum(prevVal, lastVal);
-                  const chgStr  = pctChangeStr(prevVal, lastVal);
+                  const chgNum  = pctChange(prevVal, lastVal);
+                  const chgStr  = fmtPctChange(prevVal, lastVal);
                   const firstVal = row.values.find(v => v !== null) ?? null;
                   const cagr    = showCagr ? calcCagr(firstVal, lastVal, nPeriods) : null;
                   const goodChg = row.lowerIsBetter ? (chgNum !== null && chgNum < 0) : (chgNum !== null && chgNum > 0);
@@ -494,7 +483,7 @@ export default function OverviewTab({
                       <td className="py-2 pr-4" style={{ color: 'var(--muted)' }}>{row.label}</td>
                       {row.values.map((val, i) => {
                         const prevRaw = i > 0 ? row.values[i - 1] : null;
-                        const chgVsPrior = pctChangeNum(prevRaw, val);
+                        const chgVsPrior = pctChange(prevRaw, val);
                         const arrow = i > 0 && chgVsPrior !== null ? (chgVsPrior > 0 ? '▲' : '▼') : '';
                         const arrowGood = row.lowerIsBetter
                           ? (chgVsPrior !== null && chgVsPrior < 0)

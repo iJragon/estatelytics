@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+const HISTORY_LIMIT = 200;
+
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -14,7 +16,7 @@ export async function GET() {
     .select('id, file_name, property_name, period, analyzed_at')
     .eq('user_id', user.id)
     .order('analyzed_at', { ascending: false })
-    .limit(200);
+    .limit(HISTORY_LIMIT);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

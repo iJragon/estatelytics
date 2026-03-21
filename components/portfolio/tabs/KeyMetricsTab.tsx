@@ -1,6 +1,7 @@
 'use client';
 
 import type { PortfolioKeyMetric } from '@/lib/models/portfolio';
+import { pctChange } from '@/lib/utils/format';
 
 interface KeyMetricsTabProps {
   metrics: PortfolioKeyMetric[];
@@ -15,11 +16,6 @@ function formatValue(value: number | null, unit: '%' | '$' | 'x'): string {
   if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
   if (abs >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
   return `$${value.toFixed(0)}`;
-}
-
-function pctChange(from: number | null, to: number | null): number | null {
-  if (from === null || to === null || from === 0) return null;
-  return ((to - from) / Math.abs(from)) * 100;
 }
 
 function calcCagr(first: number | null, last: number | null, nPeriods: number): number | null {

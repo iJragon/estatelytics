@@ -5,7 +5,7 @@ import { getGroqClient, DEFAULT_MODEL } from '@/lib/agents/base';
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ suggestions: [] });
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const { question, answer } = await request.json() as { question: string; answer: string };

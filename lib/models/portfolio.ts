@@ -1,5 +1,3 @@
-import type { AnalysisResult } from './statement';
-
 export interface PropertyEntry {
   id: string;
   name: string;
@@ -27,10 +25,6 @@ export interface PropertyDetail {
   portfolioAnalyzedAt?: string;
   createdAt: string;
   statements: PropertyStatement[];
-}
-
-export interface PropertyWithAnalyses extends PropertyDetail {
-  analyses: AnalysisResult[];
 }
 
 export interface CrossYearFlag {
