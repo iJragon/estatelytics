@@ -3,7 +3,7 @@
 import type React from 'react';
 import type { AnalysisResult } from '@/lib/models/statement';
 import Tooltip from '@/components/Tooltip';
-import { generateSummaryHTML, printHTML } from '@/lib/export/report-html';
+import { buildSummaryBody, downloadPDF } from '@/lib/export/report-html';
 
 interface SummaryTabProps {
   analysis: AnalysisResult;
@@ -234,10 +234,11 @@ export default function SummaryTab({ analysis, summaryText, summaryStreaming, on
             </h2>
           </div>
           <button
-            onClick={() => printHTML(
-              generateSummaryHTML(analysis, summaryText),
-              `Executive Summary — ${statement.propertyName}`,
-            )}
+            onClick={() => {
+              const filename = `${statement.propertyName} - ${statement.period}.pdf`
+                .replace(/[/\\?%*:|"<>]/g, '-');
+              downloadPDF(buildSummaryBody(analysis, summaryText), filename);
+            }}
             className="flex-shrink-0 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-opacity hover:opacity-70"
             style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
           >
