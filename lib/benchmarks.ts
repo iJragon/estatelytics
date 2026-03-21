@@ -13,9 +13,9 @@
 export const BENCHMARK_META = {
   lastUpdated: 'January 2025',
   sources: [
-    { name: 'IREM Income/Expense Analysis', url: 'https://www.irem.org/resources/by-type/research' },
-    { name: 'NMHC Research & Insight', url: 'https://www.nmhc.org/research-insight/' },
-    { name: 'ULI Emerging Trends in Real Estate 2024', url: 'https://knowledge.uli.org' },
+    { name: 'IREM Income/Expense Analysis', url: 'https://www.irem.org' },
+    { name: 'NMHC Research & Insight', url: 'https://www.nmhc.org' },
+    { name: 'ULI Emerging Trends in Real Estate 2024', url: 'https://uli.org' },
   ],
   note: 'Ranges reflect national medians for stabilized properties. Local markets, property age, unit mix, and capital structure may shift thresholds materially.',
 };
