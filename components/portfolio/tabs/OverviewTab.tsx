@@ -1,17 +1,20 @@
 'use client';
 
-import type { PropertyDetail } from '@/lib/models/portfolio';
+import type React from 'react';
+import type { PropertyDetail, CrossYearFlag } from '@/lib/models/portfolio';
 import type { AnalysisResult } from '@/lib/models/statement';
+import { downloadPortfolioPDF } from '@/lib/export/report-html';
 
 interface OverviewTabProps {
   property: PropertyDetail;
   analyses: AnalysisResult[];
+  crossYearFlags: CrossYearFlag[];
   summaryText: string;
   summaryStreaming: boolean;
   onGenerateSummary: () => void;
 }
 
-// ── Formatters ────────────────────────────────────────────────────────────────
+// ── Formatters ─────────────────────────────────────────────────────────────────
 
 function fmt$(val: number | null | undefined): string {
   if (val === null || val === undefined) return 'N/A';
@@ -27,45 +30,23 @@ function fmtPct(val: number | null | undefined): string {
   return `${val.toFixed(1)}%`;
 }
 
-function pctChange(prev: number | null, curr: number | null): string | null {
+function pctChangeNum(prev: number | null, curr: number | null): number | null {
   if (prev === null || curr === null || prev === 0) return null;
-  const chg = ((curr - prev) / Math.abs(prev)) * 100;
-  return `${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%`;
+  return ((curr - prev) / Math.abs(prev)) * 100;
 }
 
-function renderSummary(text: string) {
-  const lines = text.split('\n');
-  const elements: React.ReactNode[] = [];
-  let key = 0;
-
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) continue;
-
-    if (line.startsWith('## ') || line.startsWith('# ')) {
-      const heading = line.replace(/^#+\s*/, '');
-      elements.push(
-        <h4 key={key++} className="text-sm font-semibold mt-4 mb-1 uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-          {heading}
-        </h4>
-      );
-    } else {
-      const parts = line.split(/(\*\*[^*]+\*\*)/g);
-      elements.push(
-        <p key={key++} className="text-sm leading-7 mb-1" style={{ color: 'var(--text)' }}>
-          {parts.map((part, j) =>
-            part.startsWith('**') && part.endsWith('**')
-              ? <strong key={j} style={{ color: 'var(--text)' }}>{part.slice(2, -2)}</strong>
-              : part
-          )}
-        </p>
-      );
-    }
-  }
-  return elements;
+function pctChangeStr(prev: number | null, curr: number | null): string | null {
+  const c = pctChangeNum(prev, curr);
+  return c !== null ? `${c >= 0 ? '+' : ''}${c.toFixed(1)}%` : null;
 }
 
-// ── Stat Tile ─────────────────────────────────────────────────────────────────
+function calcCagr(first: number | null, last: number | null, n: number): number | null {
+  if (first === null || last === null || first === 0 || n <= 1) return null;
+  if (first < 0 || last < 0) return null;
+  return (Math.pow(last / first, 1 / n) - 1) * 100;
+}
+
+// ── Sub-components ──────────────────────────────────────────────────────────────
 
 function StatTile({ label, value, sub, status }: {
   label: string;
@@ -103,21 +84,50 @@ function StatTile({ label, value, sub, status }: {
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
+function renderSummary(text: string) {
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let key = 0;
 
-import type React from 'react';
-import { downloadPortfolioPDF } from '@/lib/export/report-html';
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    if (line.startsWith('## ') || line.startsWith('# ')) {
+      const heading = line.replace(/^#+\s*/, '');
+      elements.push(
+        <h4 key={key++} className="text-sm font-semibold mt-4 mb-1 uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+          {heading}
+        </h4>
+      );
+    } else {
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      elements.push(
+        <p key={key++} className="text-sm leading-7 mb-1" style={{ color: 'var(--text)' }}>
+          {parts.map((part, j) =>
+            part.startsWith('**') && part.endsWith('**')
+              ? <strong key={j} style={{ color: 'var(--text)' }}>{part.slice(2, -2)}</strong>
+              : part
+          )}
+        </p>
+      );
+    }
+  }
+  return elements;
+}
+
+// ── Main Component ──────────────────────────────────────────────────────────────
 
 export default function OverviewTab({
   property,
   analyses,
+  crossYearFlags,
   summaryText,
   summaryStreaming,
   onGenerateSummary,
 }: OverviewTabProps) {
   if (analyses.length === 0) return null;
 
-  // Period labels in statement order
   const periods = property.statements.map(
     (s, i) => s.yearLabel || analyses[i]?.statement.period || `Period ${i + 1}`
   );
@@ -130,41 +140,79 @@ export default function OverviewTab({
     ? new Date(property.portfolioAnalyzedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
-  // Pull key line items across all periods
-  const rows: Array<{
-    label: string;
-    key: string;
-    isDeduction?: boolean;
-    isRatio?: boolean;
-    bold?: boolean;
-  }> = [
-    { label: 'Total Revenue',           key: 'total_revenue',            bold: true },
-    { label: 'Total Operating Expenses',key: 'total_operating_expenses',  isDeduction: true },
-    { label: 'Net Operating Income',    key: 'noi',                       bold: true },
-    { label: 'Net Income',              key: 'net_income' },
-    { label: 'Cash Flow',               key: 'cash_flow' },
-  ];
+  // ── Data setup ────────────────────────────────────────────────────────────────
 
-  // Latest period for KPIs
   const latest = analyses[analyses.length - 1];
   const latestKf = latest.statement.keyFigures;
   const latestRatios = latest.ratios;
 
-  const latestNoi    = latestKf['noi']?.annualTotal ?? null;
-  const latestRev    = latestKf['total_revenue']?.annualTotal ?? null;
-  const latestOer    = latestRatios.oer?.value ?? null;
-  const latestVac    = latestRatios.vacancyRate?.value ?? null;
-  const latestNoi$   = fmt$(latestNoi);
-  const latestRev$   = fmt$(latestRev);
+  const latestNoi  = latestKf['noi']?.annualTotal ?? null;
+  const latestRev  = latestKf['total_revenue']?.annualTotal ?? null;
+  const latestOer  = latestRatios.oer?.value ?? null;
+  const latestVac  = latestRatios.vacancyRate?.value ?? null;
 
   const oerStatus = latestOer === null ? 'neutral' : latestOer < 65 ? 'good' : latestOer < 75 ? 'warning' : 'bad';
   const vacStatus = latestVac === null ? 'neutral' : latestVac < 7 ? 'good' : latestVac < 12 ? 'warning' : 'bad';
-  const noiColor  = latestNoi !== null && latestNoi >= 0 ? 'var(--success)' : 'var(--danger)';
+
+  // ── Cross-year high flags ──────────────────────────────────────────────────────
+  const highFlags = crossYearFlags.filter(f => f.severity === 'high');
+
+  // ── Best / Worst period by NOI ─────────────────────────────────────────────────
+  const noiValues = analyses.map((a, i) => ({
+    period: periods[i],
+    noi: a.statement.keyFigures['noi']?.annualTotal ?? null,
+  }));
+  const validNoi = noiValues.filter(n => n.noi !== null);
+  const bestPeriod  = validNoi.length > 1 ? validNoi.reduce((best, cur) => (cur.noi! > best.noi! ? cur : best)) : null;
+  const worstPeriod = validNoi.length > 1 ? validNoi.reduce((worst, cur) => (cur.noi! < worst.noi! ? cur : worst)) : null;
+
+  // ── Comparison table rows ─────────────────────────────────────────────────────
+  const tableRows: Array<{
+    label: string;
+    key: string;
+    isDeduction?: boolean;
+    bold?: boolean;
+    higherIsBad?: boolean;
+  }> = [
+    { label: 'Total Revenue',            key: 'total_revenue',           bold: true },
+    { label: 'Total Operating Expenses', key: 'total_operating_expenses', isDeduction: true, higherIsBad: true },
+    { label: 'Net Operating Income',     key: 'noi',                      bold: true },
+    { label: 'Net Income',               key: 'net_income' },
+    { label: 'Cash Flow',                key: 'cash_flow' },
+  ];
+
+  const ratioRows: Array<{
+    label: string;
+    values: (number | null)[];
+    lowerIsBetter?: boolean;
+    fmtFn: (v: number) => string;
+  }> = [
+    {
+      label: 'NOI Margin',
+      values: analyses.map(a => a.ratios.noiMargin?.value ?? null),
+      fmtFn: v => `${v.toFixed(1)}%`,
+    },
+    {
+      label: 'OER',
+      values: analyses.map(a => a.ratios.oer?.value ?? null),
+      lowerIsBetter: true,
+      fmtFn: v => `${v.toFixed(1)}%`,
+    },
+    {
+      label: 'Vacancy Rate',
+      values: analyses.map(a => a.ratios.vacancyRate?.value ?? null),
+      lowerIsBetter: true,
+      fmtFn: v => `${v.toFixed(1)}%`,
+    },
+  ];
+
+  const showCagr = analyses.length >= 3;
+  const nPeriods = analyses.length - 1;
 
   return (
     <div className="space-y-6 max-w-4xl">
 
-      {/* ── Report Header ─────────────────────────────────────────────────── */}
+      {/* ── Report Header ──────────────────────────────────────────────────── */}
       <div
         className="rounded-xl px-6 py-5 border"
         style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
@@ -205,7 +253,39 @@ export default function OverviewTab({
         </div>
       </div>
 
-      {/* ── KPI Tiles (most recent period) ────────────────────────────────── */}
+      {/* ── High Severity Flags Banner ──────────────────────────────────────── */}
+      {highFlags.length > 0 && (
+        <div
+          className="rounded-xl px-4 py-3 border"
+          style={{
+            backgroundColor: 'rgba(239,68,68,0.06)',
+            borderColor: 'rgba(239,68,68,0.25)',
+          }}
+        >
+          <div className="flex items-start gap-3">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              className="flex-shrink-0 mt-0.5" style={{ color: 'var(--danger)' }}>
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold mb-1" style={{ color: 'var(--danger)' }}>
+                {highFlags.length} High-Severity Alert{highFlags.length !== 1 ? 's' : ''} — Review Required
+              </p>
+              <ul className="space-y-0.5">
+                {highFlags.map((f, i) => (
+                  <li key={i} className="text-xs" style={{ color: 'var(--text)' }}>
+                    <strong>{f.label}</strong>: {f.description}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── KPI Tiles (most recent period) ─────────────────────────────────── */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
           Most Recent Period — {periods[periods.length - 1]}
@@ -213,13 +293,13 @@ export default function OverviewTab({
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatTile
             label="Net Operating Income"
-            value={latestNoi$}
+            value={fmt$(latestNoi)}
             sub="Annual NOI"
             status={latestNoi !== null && latestNoi >= 0 ? 'good' : latestNoi !== null ? 'bad' : 'neutral'}
           />
           <StatTile
             label="Total Revenue"
-            value={latestRev$}
+            value={fmt$(latestRev)}
             sub="Annual revenue"
           />
           <StatTile
@@ -237,7 +317,33 @@ export default function OverviewTab({
         </div>
       </div>
 
-      {/* ── Multi-period Comparison Table ─────────────────────────────────── */}
+      {/* ── Best / Worst Period Callout ──────────────────────────────────────── */}
+      {bestPeriod && worstPeriod && bestPeriod.period !== worstPeriod.period && (
+        <div className="grid grid-cols-2 gap-3">
+          <div
+            className="rounded-xl px-4 py-3 border"
+            style={{ backgroundColor: 'rgba(34,197,94,0.06)', borderColor: 'rgba(34,197,94,0.25)' }}
+          >
+            <p className="text-xs uppercase tracking-widest font-semibold mb-1" style={{ color: 'var(--success)' }}>
+              Best Period (NOI)
+            </p>
+            <p className="text-base font-bold" style={{ color: 'var(--text)' }}>{bestPeriod.period}</p>
+            <p className="text-sm font-mono" style={{ color: 'var(--success)' }}>{fmt$(bestPeriod.noi)}</p>
+          </div>
+          <div
+            className="rounded-xl px-4 py-3 border"
+            style={{ backgroundColor: 'rgba(239,68,68,0.06)', borderColor: 'rgba(239,68,68,0.25)' }}
+          >
+            <p className="text-xs uppercase tracking-widest font-semibold mb-1" style={{ color: 'var(--danger)' }}>
+              Weakest Period (NOI)
+            </p>
+            <p className="text-base font-bold" style={{ color: 'var(--text)' }}>{worstPeriod.period}</p>
+            <p className="text-sm font-mono" style={{ color: 'var(--danger)' }}>{fmt$(worstPeriod.noi)}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Multi-period Comparison Table ───────────────────────────────────── */}
       {analyses.length > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
@@ -247,7 +353,8 @@ export default function OverviewTab({
               </h3>
               <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
                 Annual totals across all periods
-                {analyses.length >= 2 && ' · % change from prior period'}
+                {analyses.length >= 2 && ' · % change from prior period · ▲/▼ vs prior'}
+                {showCagr && ' · CAGR (first to last)'}
               </p>
             </div>
           </div>
@@ -258,7 +365,7 @@ export default function OverviewTab({
                 <tr style={{ borderBottom: '2px solid var(--border)' }}>
                   <th
                     className="text-left pb-2 font-semibold uppercase tracking-wide pr-4"
-                    style={{ color: 'var(--muted)', minWidth: 180 }}
+                    style={{ color: 'var(--muted)', minWidth: 190 }}
                   >
                     Line Item
                   </th>
@@ -274,37 +381,39 @@ export default function OverviewTab({
                   {analyses.length >= 2 && (
                     <th
                       className="text-right pb-2 font-semibold uppercase tracking-wide pl-3"
-                      style={{ color: 'var(--muted)', whiteSpace: 'nowrap', minWidth: 72 }}
+                      style={{ color: 'var(--muted)', whiteSpace: 'nowrap', minWidth: 64 }}
                     >
                       Chg
+                    </th>
+                  )}
+                  {showCagr && (
+                    <th
+                      className="text-right pb-2 font-semibold uppercase tracking-wide pl-3"
+                      style={{ color: 'var(--muted)', whiteSpace: 'nowrap', minWidth: 64 }}
+                    >
+                      CAGR
                     </th>
                   )}
                 </tr>
               </thead>
               <tbody>
-                {rows.map(row => {
-                  const values = analyses.map(a => {
-                    const kf = a.statement.keyFigures;
-                    const raw = kf[row.key]?.annualTotal ?? null;
-                    return raw;
-                  });
-
-                  const hasAnyValue = values.some(v => v !== null);
-                  if (!hasAnyValue) return null;
+                {tableRows.map(row => {
+                  const values = analyses.map(a => a.statement.keyFigures[row.key]?.annualTotal ?? null);
+                  if (!values.some(v => v !== null)) return null;
 
                   const firstVal = values.find(v => v !== null) ?? null;
                   const lastVal  = values[values.length - 1];
                   const prevVal  = values.length >= 2 ? values[values.length - 2] : null;
-                  const chg      = pctChange(prevVal, lastVal);
-                  const chgNum   = prevVal !== null && lastVal !== null && prevVal !== 0
-                    ? ((lastVal - prevVal) / Math.abs(prevVal)) * 100
-                    : null;
+                  const chgStr   = pctChangeStr(prevVal, lastVal);
+                  const chgNum   = pctChangeNum(prevVal, lastVal);
+                  const cagr     = showCagr ? calcCagr(firstVal, lastVal, nPeriods) : null;
+
+                  // For deduction rows (expenses), good = going down
+                  const goodChg  = row.higherIsBad ? (chgNum !== null && chgNum < 0) : (chgNum !== null && chgNum >= 0);
+                  const goodCagr = row.higherIsBad ? (cagr !== null && cagr < 0) : (cagr !== null && cagr >= 0);
 
                   return (
-                    <tr
-                      key={row.key}
-                      style={{ borderBottom: '1px solid var(--border)' }}
-                    >
+                    <tr key={row.key} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td
                         className="py-2 pr-4"
                         style={{
@@ -317,6 +426,11 @@ export default function OverviewTab({
                       {values.map((val, i) => {
                         const display = row.isDeduction && val !== null ? (val > 0 ? -val : val) : val;
                         const isNeg = display !== null && display < 0;
+                        const prevRaw = i > 0 ? values[i - 1] : null;
+                        const chgVsPrior = pctChangeNum(prevRaw, val);
+                        const arrow = i > 0 && chgVsPrior !== null ? (chgVsPrior > 0 ? '▲' : '▼') : '';
+                        const arrowGood = row.higherIsBad ? (chgVsPrior !== null && chgVsPrior < 0) : (chgVsPrior !== null && chgVsPrior > 0);
+
                         return (
                           <td
                             key={i}
@@ -330,6 +444,11 @@ export default function OverviewTab({
                             }}
                           >
                             {display !== null ? fmt$(display) : 'N/A'}
+                            {arrow && (
+                              <span className="ml-1 text-[10px]" style={{ color: arrowGood ? 'var(--success)' : 'var(--danger)' }}>
+                                {arrow}
+                              </span>
+                            )}
                           </td>
                         );
                       })}
@@ -338,12 +457,21 @@ export default function OverviewTab({
                           className="py-2 text-right font-mono pl-3"
                           style={{
                             whiteSpace: 'nowrap',
-                            color: chgNum === null ? 'var(--muted)'
-                              : chgNum >= 0 ? 'var(--success)'
-                              : 'var(--danger)',
+                            color: chgNum === null ? 'var(--muted)' : goodChg ? 'var(--success)' : 'var(--danger)',
                           }}
                         >
-                          {chg ?? 'N/A'}
+                          {chgStr ?? '-'}
+                        </td>
+                      )}
+                      {showCagr && (
+                        <td
+                          className="py-2 text-right font-mono pl-3"
+                          style={{
+                            whiteSpace: 'nowrap',
+                            color: cagr === null ? 'var(--muted)' : goodCagr ? 'var(--success)' : 'var(--danger)',
+                          }}
+                        >
+                          {cagr !== null ? `${cagr >= 0 ? '+' : ''}${cagr.toFixed(1)}%` : '-'}
                         </td>
                       )}
                     </tr>
@@ -351,30 +479,42 @@ export default function OverviewTab({
                 })}
 
                 {/* Ratio rows */}
-                {[
-                  { label: 'NOI Margin', values: analyses.map(a => a.ratios.noiMargin?.value ?? null), isRatio: true },
-                  { label: 'OER',        values: analyses.map(a => a.ratios.oer?.value ?? null),       isRatio: true, lowerIsBetter: true },
-                ].map(row => {
+                {ratioRows.map(row => {
                   const lastVal = row.values[row.values.length - 1];
                   const prevVal = row.values.length >= 2 ? row.values[row.values.length - 2] : null;
-                  const chg = pctChange(prevVal, lastVal);
-                  const chgNum = prevVal !== null && lastVal !== null && prevVal !== 0
-                    ? ((lastVal - prevVal) / Math.abs(prevVal)) * 100
-                    : null;
+                  const chgNum  = pctChangeNum(prevVal, lastVal);
+                  const chgStr  = pctChangeStr(prevVal, lastVal);
+                  const firstVal = row.values.find(v => v !== null) ?? null;
+                  const cagr    = showCagr ? calcCagr(firstVal, lastVal, nPeriods) : null;
                   const goodChg = row.lowerIsBetter ? (chgNum !== null && chgNum < 0) : (chgNum !== null && chgNum > 0);
+                  const goodCagr = row.lowerIsBetter ? (cagr !== null && cagr < 0) : (cagr !== null && cagr > 0);
 
                   return (
                     <tr key={row.label} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td className="py-2 pr-4" style={{ color: 'var(--muted)' }}>{row.label}</td>
-                      {row.values.map((val, i) => (
-                        <td
-                          key={i}
-                          className="py-2 text-right font-mono px-3"
-                          style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}
-                        >
-                          {val !== null ? `${val.toFixed(1)}%` : 'N/A'}
-                        </td>
-                      ))}
+                      {row.values.map((val, i) => {
+                        const prevRaw = i > 0 ? row.values[i - 1] : null;
+                        const chgVsPrior = pctChangeNum(prevRaw, val);
+                        const arrow = i > 0 && chgVsPrior !== null ? (chgVsPrior > 0 ? '▲' : '▼') : '';
+                        const arrowGood = row.lowerIsBetter
+                          ? (chgVsPrior !== null && chgVsPrior < 0)
+                          : (chgVsPrior !== null && chgVsPrior > 0);
+
+                        return (
+                          <td
+                            key={i}
+                            className="py-2 text-right font-mono px-3"
+                            style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}
+                          >
+                            {val !== null ? row.fmtFn(val) : 'N/A'}
+                            {arrow && (
+                              <span className="ml-1 text-[10px]" style={{ color: arrowGood ? 'var(--success)' : 'var(--danger)' }}>
+                                {arrow}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
                       {analyses.length >= 2 && (
                         <td
                           className="py-2 text-right font-mono pl-3"
@@ -383,7 +523,18 @@ export default function OverviewTab({
                             color: chgNum === null ? 'var(--muted)' : goodChg ? 'var(--success)' : 'var(--danger)',
                           }}
                         >
-                          {chg ?? 'N/A'}
+                          {chgStr ?? '-'}
+                        </td>
+                      )}
+                      {showCagr && (
+                        <td
+                          className="py-2 text-right font-mono pl-3"
+                          style={{
+                            whiteSpace: 'nowrap',
+                            color: cagr === null ? 'var(--muted)' : goodCagr ? 'var(--success)' : 'var(--danger)',
+                          }}
+                        >
+                          {cagr !== null ? `${cagr >= 0 ? '+' : ''}${cagr.toFixed(1)}%` : '-'}
                         </td>
                       )}
                     </tr>
@@ -395,7 +546,7 @@ export default function OverviewTab({
         </div>
       )}
 
-      {/* ── AI Portfolio Summary ───────────────────────────────────────────── */}
+      {/* ── AI Portfolio Summary ─────────────────────────────────────────────── */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <div>

@@ -12,6 +12,22 @@ interface TrendChartsTabProps {
 const LINE_WIDTH = 2.5;
 const MARKER_SIZE = 6;
 
+function barTrace(
+  label: string,
+  x: string[],
+  y: (number | null)[],
+  color: string,
+): Plotly.Data {
+  return {
+    x,
+    y,
+    name: label,
+    type: 'bar',
+    marker: { color },
+    hovertemplate: `<b>${label}</b>: %{y:$,.0f}<extra></extra>`,
+  } as Plotly.Data;
+}
+
 function lineTrace(
   label: string,
   x: string[],
@@ -73,6 +89,25 @@ export default function TrendChartsTab({ analyses, periods }: TrendChartsTabProp
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+      {/* Revenue / OpEx / NOI grouped bar chart — full width */}
+      <div className="card lg:col-span-2">
+        <PlotlyChart
+          data={[
+            barTrace('Total Revenue', periods, kf('total_revenue'), COLORS.revenue),
+            barTrace('Operating Expenses', periods, kfAbs('total_operating_expenses'), COLORS.expense),
+            barTrace('Net Operating Income', periods, kf('noi'), COLORS.noi),
+          ]}
+          layout={{
+            title: { text: 'Revenue, Expenses & NOI by Period' },
+            barmode: 'group',
+            yaxis: { tickformat: '$,.0f' },
+            hovermode: 'x unified',
+          }}
+          config={cfg}
+          style={{ height: 320 }}
+        />
+      </div>
 
       {/* Revenue vs Operating Expenses */}
       <div className="card">

@@ -9,6 +9,7 @@ import KeyMetricsTab from './tabs/KeyMetricsTab';
 import TrendChartsTab from './tabs/TrendChartsTab';
 import ExpenseBreakdownTab from './tabs/ExpenseBreakdownTab';
 import CrossYearFlagsTab from './tabs/CrossYearFlagsTab';
+import PropertyChatTab from './tabs/PropertyChatTab';
 
 interface PropertyViewProps {
   property: PropertyDetail;
@@ -33,12 +34,22 @@ const TABS = [
   { id: 'trends', label: 'Trends' },
   { id: 'expenses', label: 'Expenses' },
   { id: 'flags', label: 'Cross-Year Flags' },
+  { id: 'chat', label: 'Ask AI' },
 ];
 
 function formatDate(iso: string) {
   try {
     return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   } catch { return iso; }
+}
+
+function fmtNoi(val: number | null | undefined): string | null {
+  if (val === null || val === undefined) return null;
+  const abs = Math.abs(val);
+  const sign = val < 0 ? '-' : '+';
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M NOI`;
+  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}K NOI`;
+  return null;
 }
 
 export default function PropertyView({
@@ -236,7 +247,11 @@ export default function PropertyView({
         {/* Statement chips */}
         {!isEmpty && (
           <div className="flex flex-wrap gap-1.5 mt-3">
-            {property.statements.map(stmt => (
+            {property.statements.map((stmt, stmtIdx) => {
+              const stmtAnalysis = analyses[stmtIdx];
+              const noi = stmtAnalysis?.statement.keyFigures['noi']?.annualTotal;
+              const noiLabel = fmtNoi(noi);
+              return (
               <div key={stmt.id} className="group flex items-center">
                 {editingStmtId === stmt.id ? (
                   <form
@@ -273,6 +288,17 @@ export default function PropertyView({
                     style={{ backgroundColor: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: 'var(--accent)' }}
                   >
                     <span>{stmt.yearLabel || stmt.period}</span>
+                    {noiLabel && (
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+                        style={{
+                          backgroundColor: noi! >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                          color: noi! >= 0 ? 'var(--success)' : 'var(--danger)',
+                        }}
+                      >
+                        {noiLabel}
+                      </span>
+                    )}
                     {/* Pencil edit */}
                     <button
                       onClick={() => { setEditingStmtId(stmt.id); setEditingLabel(stmt.yearLabel || stmt.period); }}
@@ -297,7 +323,8 @@ export default function PropertyView({
                   </div>
                 )}
               </div>
-            ))}
+            );
+            })}
             <button
               onClick={() => setShowAddModal(true)}
               className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border transition-colors hover:opacity-80"
@@ -379,6 +406,7 @@ export default function PropertyView({
               <OverviewTab
                 property={property}
                 analyses={analyses}
+                crossYearFlags={crossYearFlags}
                 summaryText={summaryText}
                 summaryStreaming={summaryStreaming}
                 onGenerateSummary={onGenerateSummary}
@@ -388,6 +416,13 @@ export default function PropertyView({
             {activeTab === 'trends' && <TrendChartsTab analyses={analyses} periods={periods} />}
             {activeTab === 'expenses' && <ExpenseBreakdownTab analyses={analyses} periods={periods} />}
             {activeTab === 'flags' && <CrossYearFlagsTab flags={crossYearFlags} />}
+            {activeTab === 'chat' && (
+              <PropertyChatTab
+                propertyName={property.name}
+                analyses={analyses}
+                periods={periods}
+              />
+            )}
           </>
         )}
       </div>
