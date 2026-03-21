@@ -113,13 +113,14 @@ function IncomeRow({ label, tooltip, value, pctBase, indent = 0, bold = false, i
               ? (isNeg ? 'var(--danger)' : 'var(--text)')
               : (isNeg ? 'rgba(239,68,68,0.7)' : 'var(--muted)'),
             fontWeight: bold ? 600 : 400,
+            whiteSpace: 'nowrap',
           }}
         >
           {displayVal !== null ? fmtFull$(displayVal) : 'N/A'}
         </td>
         <td
           className="py-2 text-right font-mono text-xs"
-          style={{ color: 'var(--muted)', minWidth: 64 }}
+          style={{ color: 'var(--muted)', minWidth: 56, whiteSpace: 'nowrap' }}
         >
           {pctVal !== null ? fmtPct(pctVal) : ''}
         </td>
@@ -149,11 +150,16 @@ function StatTile({ label, tooltip, value, sub, status }: {
     : label;
 
   return (
-    <div className="card text-center">
+    <div className="card text-center min-w-0">
       <p className="text-xs uppercase tracking-widest mb-1" style={{ color: 'var(--muted)' }}>{labelNode}</p>
       <p
-        className="text-2xl font-bold leading-none"
-        style={{ color: status ? statusColor[status] : 'var(--text)' }}
+        className="font-bold leading-none"
+        style={{
+          color: status ? statusColor[status] : 'var(--text)',
+          fontSize: value.length > 8 ? '1.25rem' : '1.5rem',
+          overflowWrap: 'break-word',
+          wordBreak: 'break-word',
+        }}
       >
         {value}
       </p>

@@ -67,6 +67,80 @@ function fmtPct(val: number | null): string {
   return `${val.toFixed(1)}%`;
 }
 
+// Returns 'ok' | 'empty' | 'invalid' for a raw input string
+function inputStatus(val: string): 'ok' | 'empty' | 'invalid' {
+  if (!val.trim()) return 'empty';
+  return safeNum(val) !== null ? 'ok' : 'invalid';
+}
+
+// Builds a short reason string for why an investment metric is N/A
+function investmentReason(
+  key: string,
+  inputs: PropertyInputs,
+  noi: number | null,
+  totalRev: number | null,
+): string | undefined {
+  const s = {
+    purchasePrice:     inputStatus(inputs.purchasePrice),
+    marketValue:       inputStatus(inputs.marketValue),
+    loanBalance:       inputStatus(inputs.loanBalance),
+    annualDebtService: inputStatus(inputs.annualDebtService),
+    units:             inputStatus(inputs.units),
+  };
+
+  function fmt(field: string, status: 'ok' | 'empty' | 'invalid'): string | null {
+    if (status === 'invalid') return `"${field}" is not a valid number`;
+    if (status === 'empty')   return `${field} not entered`;
+    return null;
+  }
+
+  const parts: string[] = [];
+
+  switch (key) {
+    case 'capRate':
+      if (noi === null) parts.push('NOI not found in statement');
+      { const r = fmt('Purchase Price', s.purchasePrice); if (r) parts.push(r); }
+      break;
+    case 'coc': {
+      if (noi === null) parts.push('NOI not found in statement');
+      const rds = fmt('Annual Debt Service', s.annualDebtService); if (rds) parts.push(rds);
+      const rpp = fmt('Purchase Price', s.purchasePrice); if (rpp) parts.push(rpp);
+      const rlb = fmt('Loan Balance', s.loanBalance); if (rlb) parts.push(rlb);
+      break;
+    }
+    case 'grm':
+      { const r = fmt('Purchase Price', s.purchasePrice); if (r) parts.push(r); }
+      if (totalRev === null) parts.push('Total Revenue not found in statement');
+      break;
+    case 'ltv': {
+      const r = fmt('Loan Balance', s.loanBalance); if (r) parts.push(r);
+      if (s.marketValue !== 'ok' && s.purchasePrice !== 'ok') {
+        parts.push('Market Value or Purchase Price not entered');
+      }
+      break;
+    }
+    case 'dscr':
+      if (noi === null) parts.push('NOI not found in statement');
+      { const r = fmt('Annual Debt Service', s.annualDebtService); if (r) parts.push(r); }
+      break;
+    case 'debtYield':
+      if (noi === null) parts.push('NOI not found in statement');
+      { const r = fmt('Loan Balance', s.loanBalance); if (r) parts.push(r); }
+      break;
+    case 'noiPerUnit':
+      if (noi === null) parts.push('NOI not found in statement');
+      { const r = fmt('Total Units', s.units); if (r) parts.push(r); }
+      break;
+    case 'pricePerUnit': {
+      const rp = fmt('Purchase Price', s.purchasePrice); if (rp) parts.push(rp);
+      const ru = fmt('Total Units', s.units); if (ru) parts.push(ru);
+      break;
+    }
+  }
+
+  return parts.length ? parts[0] : undefined; // show only the first blocker to keep it concise
+}
+
 function statusFor(metric: string, value: number | null): 'good' | 'warning' | 'bad' | 'unknown' {
   if (value === null) return 'unknown';
   switch (metric) {
@@ -113,12 +187,30 @@ function MetricCard({
   sub?: string;
   status?: 'good' | 'warning' | 'bad' | 'unknown';
 }) {
+  const isUnavailable = value === 'N/A' || value === 'Check inputs';
   return (
-    <div className="card text-center">
+    <div className="card text-center min-w-0">
       <p className="text-xs leading-snug" style={{ color: 'var(--muted)' }}>{label}</p>
-      <p className="text-xl font-bold mt-1" style={{ color: 'var(--text)' }}>{value}</p>
-      {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{sub}</p>}
-      {status && status !== 'unknown' && (
+      <p
+        className="font-bold mt-1 leading-tight"
+        style={{
+          color: value === 'Check inputs' ? 'var(--warning)' : 'var(--text)',
+          fontSize: value.length > 10 ? '1rem' : '1.25rem',
+          overflowWrap: 'break-word',
+          wordBreak: 'break-word',
+        }}
+      >
+        {value}
+      </p>
+      {sub && (
+        <p
+          className="text-xs mt-0.5 leading-snug"
+          style={{ color: isUnavailable ? 'var(--warning)' : 'var(--muted)' }}
+        >
+          {sub}
+        </p>
+      )}
+      {status && status !== 'unknown' && !isUnavailable && (
         <span className={`badge-${status} mt-1 inline-block`}>{status}</span>
       )}
     </div>
@@ -323,22 +415,28 @@ export default function PropertyContextTab({
         )}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {([
-            { key: 'capRate',      label: 'Cap Rate',             tooltip: 'Cap Rate',                         display: fmtPct(capRate),         value: capRate },
-            { key: 'coc',          label: 'Cash-on-Cash Return',  tooltip: 'Cash-on-Cash Return',              display: fmtPct(coc),             value: coc },
-            { key: 'grm',          label: 'Gross Rent Multiplier',tooltip: 'Gross Rent Multiplier',            display: fmtX(grm),               value: grm },
-            { key: 'ltv',          label: 'Loan-to-Value',        tooltip: 'Loan-to-Value',                    display: fmtPct(ltv),             value: ltv },
-            { key: 'dscr',         label: 'Debt Service Coverage',tooltip: 'DSCR (Debt Service Coverage Ratio)', display: fmtX(dscr),            value: dscr },
-            { key: 'debtYield',    label: 'Debt Yield',           tooltip: 'Debt Yield',                       display: fmtPct(debtYield),       value: debtYield },
-            { key: 'noiPerUnit',   label: 'NOI per Unit',         tooltip: 'NOI per Unit',                     display: fmtDollar(noiPerUnit),   value: noiPerUnit },
-            { key: 'pricePerUnit', label: 'Price per Unit',       tooltip: 'Price per Unit',                   display: fmtDollar(pricePerUnit), value: pricePerUnit },
-          ]).map(({ key, label, tooltip, display, value }) => (
-            <MetricCard
-              key={key}
-              label={<Tooltip term={tooltip}>{label}</Tooltip>}
-              value={display}
-              status={statusFor(key, value)}
-            />
-          ))}
+            { key: 'capRate',      label: 'Cap Rate',             tooltip: 'Cap Rate',                           display: fmtPct(capRate),         value: capRate },
+            { key: 'coc',          label: 'Cash-on-Cash Return',  tooltip: 'Cash-on-Cash Return',                display: fmtPct(coc),             value: coc },
+            { key: 'grm',          label: 'Gross Rent Multiplier',tooltip: 'Gross Rent Multiplier',              display: fmtX(grm),               value: grm },
+            { key: 'ltv',          label: 'Loan-to-Value',        tooltip: 'Loan-to-Value',                      display: fmtPct(ltv),             value: ltv },
+            { key: 'dscr',         label: 'Debt Service Coverage',tooltip: 'DSCR (Debt Service Coverage Ratio)', display: fmtX(dscr),              value: dscr },
+            { key: 'debtYield',    label: 'Debt Yield',           tooltip: 'Debt Yield',                         display: fmtPct(debtYield),       value: debtYield },
+            { key: 'noiPerUnit',   label: 'NOI per Unit',         tooltip: 'NOI per Unit',                       display: fmtDollar(noiPerUnit),   value: noiPerUnit },
+            { key: 'pricePerUnit', label: 'Price per Unit',       tooltip: 'Price per Unit',                     display: fmtDollar(pricePerUnit), value: pricePerUnit },
+          ]).map(({ key, label, tooltip, display, value }) => {
+            const reason = display === 'N/A'
+              ? investmentReason(key, inputs, noi, totalRev)
+              : undefined;
+            return (
+              <MetricCard
+                key={key}
+                label={<Tooltip term={tooltip}>{label}</Tooltip>}
+                value={display}
+                sub={reason}
+                status={statusFor(key, value)}
+              />
+            );
+          })}
         </div>
       </div>
 
