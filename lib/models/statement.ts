@@ -24,6 +24,13 @@ export interface ParserReportEntry {
   annualTotal: number | null;
 }
 
+export interface PromotedRow {
+  rowNumber: number;
+  label: string;         // user-assigned name
+  sourceLabel: string;   // original row label from the statement
+  annualTotal: number | null;
+}
+
 export interface FinancialStatement {
   propertyName: string;
   period: string;
@@ -33,6 +40,7 @@ export interface FinancialStatement {
   keyFigures: Record<string, LineItem>; // semantic key -> LineItem
   structure: SheetStructure;
   parserReport?: ParserReportEntry[]; // what the AI extractor found for each key figure
+  promotedRows?: PromotedRow[];       // user-pinned rows from the statement explorer
 }
 
 export const KEY_FIGURE_NAMES = [

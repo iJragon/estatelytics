@@ -17,7 +17,7 @@ import ExpensesTab from '@/components/dashboard/tabs/ExpensesTab';
 import RatiosTab from '@/components/dashboard/tabs/RatiosTab';
 import TrendsTab from '@/components/dashboard/tabs/TrendsTab';
 import AnomaliesTab from '@/components/dashboard/tabs/AnomaliesTab';
-import DealDetailsTab, { type DealInputs, DEFAULT_DEAL_INPUTS } from '@/components/dashboard/tabs/DealDetailsTab';
+import PropertyContextTab, { type PropertyInputs, DEFAULT_PROPERTY_INPUTS } from '@/components/dashboard/tabs/PropertyContextTab';
 import ChatTab from '@/components/dashboard/tabs/ChatTab';
 import CustomChartsTab from '@/components/dashboard/tabs/CustomChartsTab';
 import BenchmarksTab from '@/components/dashboard/tabs/BenchmarksTab';
@@ -40,7 +40,7 @@ const ANALYSIS_TABS = [
 ];
 
 const TOOL_TABS = [
-  { id: 'deal', label: 'Deal Details' },
+  { id: 'context', label: 'Property Context' },
   { id: 'chat', label: 'Chat' },
   { id: 'charts', label: 'Charts' },
 ];
@@ -61,7 +61,7 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
   const [activeTab, setActiveTab] = useState('summary');
   const [history, setHistory] = useState<HistoryEntry[]>(initialHistory);
   const [customCharts, setCustomCharts] = useState<Array<{ spec: ChartSpec; explanation: string; title: string }>>([]);
-  const [dealInputs, setDealInputs] = useState<DealInputs>(DEFAULT_DEAL_INPUTS);
+  const [propertyInputs, setPropertyInputs] = useState<PropertyInputs>(DEFAULT_PROPERTY_INPUTS);
   const [anomalyExplanations, setAnomalyExplanations] = useState<Record<number, string>>({});
   const [resolvedAnomalies, setResolvedAnomalies] = useState<Set<number>>(new Set());
   const [showForceConfirm, setShowForceConfirm] = useState(false);
@@ -88,18 +88,18 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
 
   useEffect(() => {
     if (!analysis) return;
-    try { localStorage.setItem(`sa_deal_${analysis.fileHash}`, JSON.stringify(dealInputs)); } catch {}
-  }, [dealInputs, analysis?.fileHash]);
+    try { localStorage.setItem(`sa_context_${analysis.fileHash}`, JSON.stringify(propertyInputs)); } catch {}
+  }, [propertyInputs, analysis?.fileHash]);
 
   function loadToolsFromStorage(fileHash: string) {
     try {
       const charts = localStorage.getItem(`sa_charts_${fileHash}`);
       setCustomCharts(charts ? JSON.parse(charts) : []);
-      const deal = localStorage.getItem(`sa_deal_${fileHash}`);
-      setDealInputs(deal ? JSON.parse(deal) : DEFAULT_DEAL_INPUTS);
+      const ctx = localStorage.getItem(`sa_context_${fileHash}`);
+      setPropertyInputs(ctx ? JSON.parse(ctx) : DEFAULT_PROPERTY_INPUTS);
     } catch {
       setCustomCharts([]);
-      setDealInputs(DEFAULT_DEAL_INPUTS);
+      setPropertyInputs(DEFAULT_PROPERTY_INPUTS);
     }
   }
 
@@ -873,11 +873,22 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
                       onUnresolve={handleUnresolveAnomaly}
                     />
                   )}
-                  {activeTab === 'deal' && (
-                    <DealDetailsTab
+                  {activeTab === 'context' && (
+                    <PropertyContextTab
                       analysis={analysis}
-                      inputs={dealInputs}
-                      onInputChange={(key, value) => setDealInputs(prev => ({ ...prev, [key]: value }))}
+                      inputs={propertyInputs}
+                      onInputChange={(key, value) => setPropertyInputs(prev => ({ ...prev, [key]: value }))}
+                      onPromotedRowsChange={async (rows) => {
+                        setAnalysis(prev => prev ? {
+                          ...prev,
+                          statement: { ...prev.statement, promotedRows: rows },
+                        } : prev);
+                        await fetch('/api/analyze', {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ fileHash: analysis.fileHash, promotedRows: rows }),
+                        });
+                      }}
                     />
                   )}
                   {activeTab === 'chat' && (

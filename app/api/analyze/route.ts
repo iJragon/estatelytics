@@ -14,15 +14,28 @@ export async function PATCH(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { fileHash, summaryText, chatHistory } = await request.json() as {
+    const { fileHash, summaryText, chatHistory, promotedRows } = await request.json() as {
       fileHash: string;
       summaryText?: string;
       chatHistory?: Array<{ role: string; content: string }>;
+      promotedRows?: Array<{ rowNumber: number; label: string; sourceLabel: string; annualTotal: number | null }>;
     };
 
     const updates: Record<string, unknown> = {};
     if (summaryText !== undefined) updates.summary_text = summaryText;
     if (chatHistory !== undefined) updates.chat_history = chatHistory;
+
+    if (promotedRows !== undefined) {
+      const { data: existing } = await supabase
+        .from('analyses')
+        .select('statement_data')
+        .eq('user_id', user.id)
+        .eq('file_hash', fileHash)
+        .single();
+      if (existing?.statement_data) {
+        updates.statement_data = { ...existing.statement_data, promotedRows };
+      }
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ success: true });
