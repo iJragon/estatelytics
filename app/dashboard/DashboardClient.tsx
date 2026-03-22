@@ -772,8 +772,8 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
               onAnalyzeFile={handleAnalyzeFileForProperty}
               onRemoveStatement={handleRemoveStatement}
               onRenameStatement={handleRenameStatement}
-              onRenameProperty={(name) => handlePropertyRename(propertyDetail.id, name)}
-              onDeleteProperty={() => handlePropertyDelete(propertyDetail.id)}
+              onRenameProperty={(name) => handlePropertyRename(propertyDetail!.id, name)}
+              onDeleteProperty={() => handlePropertyDelete(propertyDetail!.id)}
             />
           )
         ) : (
