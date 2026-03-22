@@ -43,6 +43,7 @@ export default function PlotlyChart({ data, layout = {}, config = {}, style }: P
     title: { font: { color: mutedColor, size: 11 } } as never,
     zeroline: false,
     showgrid: true,
+    automargin: true,
   };
 
   // Deep-merge axis overrides so chart-specific tickformat etc. doesn't blow away gridcolor

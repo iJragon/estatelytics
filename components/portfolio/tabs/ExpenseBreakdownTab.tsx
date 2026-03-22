@@ -57,7 +57,7 @@ export default function ExpenseBreakdownTab({ analyses, periods }: ExpenseBreakd
             barmode: 'stack',
             yaxis: { tickformat: '$,.0f' },
             hovermode: 'x unified',
-            margin: { t: 8, b: 40, l: 60, r: 16 },
+            margin: { t: 8, b: 40, l: 80, r: 16 },
           }}
           config={{ displayModeBar: false, responsive: true }}
           style={{ height: 380 }}
