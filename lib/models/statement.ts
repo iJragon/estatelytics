@@ -124,6 +124,7 @@ export function migrateStatement(statement: FinancialStatement): FinancialStatem
 }
 
 export interface AnalysisResult {
+  id?: string;         // analyses.id (UUID) — present after DB save
   statement: FinancialStatement;
   ratios: RatioReport;
   anomalies: Anomaly[];

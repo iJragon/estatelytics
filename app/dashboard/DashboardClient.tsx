@@ -184,7 +184,7 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
         const existing = prev.find(h => h.fileHash === result.fileHash);
         if (existing) return prev;
         const newEntry: HistoryEntry = {
-          id: result.fileHash, // will be replaced on next page load with real UUID
+          id: result.id ?? result.fileHash,
           fileHash: result.fileHash,
           fileName: result.fileName,
           propertyName: result.statement.propertyName,
@@ -253,7 +253,7 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
       for (const result of successful) {
         if (!updated.find(h => h.fileHash === result.fileHash)) {
           updated = [{
-            id: result.fileHash,
+            id: result.id ?? result.fileHash,
             fileHash: result.fileHash,
             fileName: result.fileName,
             propertyName: result.statement.propertyName,

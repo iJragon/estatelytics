@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
 
       if (existing) {
         const result: AnalysisResult = {
+          id: existing.id,
           statement: migrateStatement(existing.statement_data),
           ratios: existing.ratios_data,
           anomalies: existing.anomalies_data,
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
     const analyzedAt = new Date().toISOString();
 
     // Save to Supabase
-    const { error: insertError } = await supabase.from('analyses').upsert({
+    const { data: insertData, error: insertError } = await supabase.from('analyses').upsert({
       user_id: user.id,
       file_hash: fileHash,
       file_name: file.name,
@@ -146,13 +147,14 @@ export async function POST(request: NextRequest) {
       trends_data: trends,
       summary_text: null,
       chat_history: [],
-    }, { onConflict: 'user_id,file_hash' });
+    }, { onConflict: 'user_id,file_hash' }).select('id').single();
 
     if (insertError) {
       console.error('Supabase insert error:', insertError);
     }
 
     const result: AnalysisResult = {
+      id: insertData?.id,
       statement,
       ratios,
       anomalies,
