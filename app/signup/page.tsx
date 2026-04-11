@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/client';
 import ThemeToggle from '@/components/ThemeToggle';
 
 export default function SignupPage() {
-  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -35,7 +34,6 @@ export default function SignupPage() {
         email,
         password,
         options: {
-          data: { username },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
@@ -104,21 +102,6 @@ export default function SignupPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>
-                  Username
-                </label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
-                  required
-                  className="input-field"
-                  placeholder="johndoe"
-                  autoComplete="username"
-                />
-              </div>
-
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>
                   Email
