@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { DealInputs, OperatingExpenseBreakdown } from '@/lib/models/deal';
 import { DEFAULT_DEAL_INPUTS } from '@/lib/models/deal';
 
@@ -44,16 +44,38 @@ function NumberInput({
   onChange,
   prefix,
   suffix,
-  step = 1,
-  min,
 }: {
   value: number;
   onChange: (v: number) => void;
   prefix?: string;
   suffix?: string;
-  step?: number;
-  min?: number;
 }) {
+  const [raw, setRaw] = useState(value === 0 ? '' : String(value));
+
+  // Sync when parent resets the form
+  useEffect(() => {
+    setRaw(value === 0 ? '' : String(value));
+  }, [value]);
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const text = e.target.value;
+    // Allow empty, digits, one decimal point, and leading minus
+    if (!/^-?\d*\.?\d*$/.test(text)) return;
+    setRaw(text);
+    const parsed = parseFloat(text);
+    onChange(isNaN(parsed) ? 0 : parsed);
+  }
+
+  function handleBlur() {
+    const parsed = parseFloat(raw);
+    if (isNaN(parsed)) {
+      setRaw('');
+      onChange(0);
+    } else {
+      setRaw(String(parsed));
+    }
+  }
+
   return (
     <div className="flex items-center" style={{ border: '1px solid var(--border)', borderRadius: '0.375rem', overflow: 'hidden', backgroundColor: 'var(--bg)' }}>
       {prefix && (
@@ -62,11 +84,12 @@ function NumberInput({
         </span>
       )}
       <input
-        type="number"
-        value={value}
-        onChange={e => onChange(parseFloat(e.target.value) || 0)}
-        step={step}
-        min={min}
+        type="text"
+        inputMode="decimal"
+        value={raw}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        placeholder="0"
         className="flex-1 px-3 py-2 text-sm outline-none"
         style={{ backgroundColor: 'transparent', color: 'var(--text)', minWidth: 0 }}
       />
@@ -85,8 +108,6 @@ function PctInput({ value, onChange }: { value: number; onChange: (v: number) =>
       value={parseFloat((value * 100).toFixed(4))}
       onChange={v => onChange(v / 100)}
       suffix="%"
-      step={0.1}
-      min={0}
     />
   );
 }
@@ -175,13 +196,13 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
               </div>
             </Field>
             <Field label="Purchase Price">
-              <NumberInput value={inputs.purchasePrice} onChange={v => set('purchasePrice', v)} prefix="$" step={1000} />
+              <NumberInput value={inputs.purchasePrice} onChange={v => set('purchasePrice', v)} prefix="$" />
             </Field>
             <Field label="Closing Cost Rate" hint="Typically 2–4% of purchase price">
               <PctInput value={inputs.closingCostRate} onChange={v => set('closingCostRate', v)} />
             </Field>
             <Field label="CapEx Budget" hint="Planned capital improvements at purchase">
-              <NumberInput value={inputs.capexBudget} onChange={v => set('capexBudget', v)} prefix="$" step={1000} />
+              <NumberInput value={inputs.capexBudget} onChange={v => set('capexBudget', v)} prefix="$" />
             </Field>
             <Field label="Depreciation Schedule">
               <div className="flex gap-2">
@@ -210,7 +231,7 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
         {step === 'financing' && (
           <>
             <Field label="Down Payment" hint="Dollar amount — not percentage">
-              <NumberInput value={inputs.downPayment} onChange={v => set('downPayment', v)} prefix="$" step={5000} />
+              <NumberInput value={inputs.downPayment} onChange={v => set('downPayment', v)} prefix="$" />
             </Field>
             {inputs.purchasePrice > 0 && (
               <p className="text-xs" style={{ color: 'var(--muted)' }}>
@@ -222,10 +243,10 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
               <PctInput value={inputs.interestRate} onChange={v => set('interestRate', v)} />
             </Field>
             <Field label="Amortization Period">
-              <NumberInput value={inputs.amortizationYears} onChange={v => set('amortizationYears', v)} suffix="years" step={1} min={1} />
+              <NumberInput value={inputs.amortizationYears} onChange={v => set('amortizationYears', v)} suffix="years" />
             </Field>
             <Field label="Loan Term (Balloon)" hint="When the balloon payment is due (≤ amortization period)">
-              <NumberInput value={inputs.loanTermYears} onChange={v => set('loanTermYears', v)} suffix="years" step={1} min={1} />
+              <NumberInput value={inputs.loanTermYears} onChange={v => set('loanTermYears', v)} suffix="years" />
             </Field>
           </>
         )}
@@ -233,10 +254,10 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
         {step === 'income' && (
           <>
             <Field label="Gross Scheduled Income" hint="Annual potential rental income at 100% occupancy">
-              <NumberInput value={inputs.grossScheduledIncome} onChange={v => set('grossScheduledIncome', v)} prefix="$" step={1000} />
+              <NumberInput value={inputs.grossScheduledIncome} onChange={v => set('grossScheduledIncome', v)} prefix="$" />
             </Field>
             <Field label="Other Income" hint="Annual parking, laundry, storage, etc.">
-              <NumberInput value={inputs.otherIncome} onChange={v => set('otherIncome', v)} prefix="$" step={500} />
+              <NumberInput value={inputs.otherIncome} onChange={v => set('otherIncome', v)} prefix="$" />
             </Field>
           </>
         )}
@@ -252,7 +273,7 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
                   value={inputs.expenses[key]}
                   onChange={v => setExpense(key, v)}
                   prefix="$"
-                  step={100}
+                 
                 />
               </Field>
             ))}
@@ -282,7 +303,7 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
               <PctInput value={inputs.exitCapRate} onChange={v => set('exitCapRate', v)} />
             </Field>
             <Field label="Hold Period">
-              <NumberInput value={inputs.holdPeriod} onChange={v => set('holdPeriod', v)} suffix="years" step={1} min={1} />
+              <NumberInput value={inputs.holdPeriod} onChange={v => set('holdPeriod', v)} suffix="years" />
             </Field>
             <Field label="Selling Cost Rate" hint="Broker commissions, transfer taxes, etc.">
               <PctInput value={inputs.sellingCostRate} onChange={v => set('sellingCostRate', v)} />
