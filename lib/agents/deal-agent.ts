@@ -107,7 +107,8 @@ export async function streamDealNarrative(
   const systemPrompt = `You are an expert real estate underwriter and investment analyst.
 You analyze pre-acquisition deal metrics and provide clear, actionable investment recommendations.
 Your analysis should be honest, data-driven, and highlight both opportunities and risks.
-Write in a professional but accessible tone — avoid jargon without explanation.
+Write in a professional but conversational tone. Avoid jargon without explanation.
+Do NOT use em dashes (--) or en dashes. Use commas, colons, or periods instead.
 Structure your response with clear sections and bullet points where appropriate.`;
 
   const userPrompt = `Based on the following deal underwriting data, provide a comprehensive investment analysis and recommendation.
