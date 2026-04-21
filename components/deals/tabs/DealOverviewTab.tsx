@@ -26,8 +26,8 @@ const VERDICT_CONFIG: Record<ScoreBreakdown['verdict'], { label: string; color: 
   'strong-buy': { label: 'Strong Buy', color: '#15803d', bg: '#dcfce7' },
   'buy':        { label: 'Buy',         color: '#16a34a', bg: '#f0fdf4' },
   'conditional':{ label: 'Conditional', color: '#b45309', bg: '#fef3c7' },
-  'pass':       { label: 'Pass',        color: '#dc2626', bg: '#fee2e2' },
-  'strong-pass':{ label: 'Strong Pass', color: '#991b1b', bg: '#fecaca' },
+  'avoid':       { label: 'Avoid',        color: '#dc2626', bg: '#fee2e2' },
+  'strong-avoid':{ label: 'Strong Avoid', color: '#991b1b', bg: '#fecaca' },
 };
 
 function MetricRow({ label, value, good }: { label: string; value: string; good?: boolean | null }) {

@@ -163,7 +163,7 @@ export interface ScoreBreakdown {
   safetyScore: number;           // 0–25
   growthScore: number;           // 0–25
   total: number;                 // 0–100
-  verdict: 'strong-buy' | 'buy' | 'conditional' | 'pass' | 'strong-pass';
+  verdict: 'strong-buy' | 'buy' | 'conditional' | 'avoid' | 'strong-avoid';
 }
 
 export interface DealAnalysis {
