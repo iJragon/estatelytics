@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { HistoryEntry } from '@/app/dashboard/page';
 import type { PropertyEntry } from '@/lib/models/portfolio';
+import type { DealEntry } from '@/lib/models/deal';
 import ThemeToggle from '@/components/ThemeToggle';
 
 const MIN_WIDTH = 220;
@@ -33,6 +34,11 @@ interface SidebarProps {
   onSignOut: () => void;
   loadingHistoryId?: string | null;
   loadingPropertyId?: string;
+  // Deals
+  deals: DealEntry[];
+  activeDealId?: string;
+  onDealSelect: (deal: DealEntry) => void;
+  onDealCreate: (name: string, address?: string) => Promise<void>;
 }
 
 function formatDate(iso: string): string {
@@ -67,6 +73,10 @@ export default function Sidebar({
   onSignOut,
   loadingHistoryId,
   loadingPropertyId,
+  deals,
+  activeDealId,
+  onDealSelect,
+  onDealCreate,
 }: SidebarProps) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_WIDTH);
   const [queuedFiles, setQueuedFiles] = useState<File[]>([]);
@@ -82,6 +92,11 @@ export default function Sidebar({
   const [editingPropField, setEditingPropField] = useState<'name' | 'address' | null>(null);
   const [editingPropValue, setEditingPropValue] = useState('');
   const [historySearch, setHistorySearch] = useState('');
+  // Deals
+  const [showNewDeal, setShowNewDeal] = useState(false);
+  const [newDealName, setNewDealName] = useState('');
+  const [newDealAddress, setNewDealAddress] = useState('');
+  const [creatingDeal, setCreatingDeal] = useState(false);
   // Confirmation modal
   const [confirm, setConfirm] = useState<{ title: string; body: string; action: () => void } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -401,6 +416,131 @@ export default function Sidebar({
                       </div>
                     )}
                   </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="border-t mx-4" style={{ borderColor: 'var(--border)' }} />
+
+        {/* Deals */}
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+              Deals
+              {deals.length > 0 && (
+                <span className="ml-1 font-normal normal-case tracking-normal" style={{ opacity: 0.55 }}>
+                  ({deals.length})
+                </span>
+              )}
+            </p>
+            <button
+              onClick={() => setShowNewDeal(v => !v)}
+              className="text-xs hover:opacity-80 transition-opacity flex items-center gap-1"
+              style={{ color: 'var(--accent)' }}
+              title="New deal"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              New
+            </button>
+          </div>
+
+          {showNewDeal && (
+            <div className="mb-3 space-y-2">
+              <input
+                type="text"
+                value={newDealName}
+                onChange={e => setNewDealName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && newDealName.trim() && (async () => {
+                  setCreatingDeal(true);
+                  try { await onDealCreate(newDealName.trim(), newDealAddress.trim() || undefined); setNewDealName(''); setNewDealAddress(''); setShowNewDeal(false); }
+                  finally { setCreatingDeal(false); }
+                })()}
+                placeholder="Deal name (e.g. 123 Main St)"
+                autoFocus
+                className="input-field text-xs w-full"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              />
+              <input
+                type="text"
+                value={newDealAddress}
+                onChange={e => setNewDealAddress(e.target.value)}
+                placeholder="Address (optional)"
+                className="input-field text-xs w-full"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              />
+              <div className="flex gap-1.5">
+                <button
+                  onClick={async () => {
+                    if (!newDealName.trim()) return;
+                    setCreatingDeal(true);
+                    try { await onDealCreate(newDealName.trim(), newDealAddress.trim() || undefined); setNewDealName(''); setNewDealAddress(''); setShowNewDeal(false); }
+                    finally { setCreatingDeal(false); }
+                  }}
+                  disabled={!newDealName.trim() || creatingDeal}
+                  className="flex-1 btn-primary text-xs py-1.5"
+                >
+                  {creatingDeal ? 'Creating…' : 'Create'}
+                </button>
+                <button
+                  onClick={() => { setShowNewDeal(false); setNewDealName(''); setNewDealAddress(''); }}
+                  className="px-3 py-1.5 text-xs rounded-md border transition-colors hover:opacity-80"
+                  style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {deals.length === 0 ? (
+            <p className="text-xs" style={{ color: 'var(--muted)' }}>No deals yet</p>
+          ) : (
+            <div className="space-y-1">
+              {deals.map(deal => {
+                const isActive = activeDealId === deal.id;
+                const verdictColors: Record<string, string> = {
+                  'strong-buy': '#15803d', 'buy': '#16a34a',
+                  'conditional': '#b45309', 'pass': '#dc2626', 'strong-pass': '#991b1b',
+                };
+                return (
+                  <button
+                    key={deal.id}
+                    onClick={() => onDealSelect(deal)}
+                    className="w-full text-left p-2 rounded-md transition-colors hover:opacity-80"
+                    style={{
+                      backgroundColor: isActive ? 'rgba(59,130,246,0.1)' : 'var(--bg)',
+                      border: isActive ? '1px solid rgba(59,130,246,0.3)' : '1px solid transparent',
+                    }}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                        style={{ color: 'var(--accent)', flexShrink: 0 }}>
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                      </svg>
+                      <p className="text-xs font-medium truncate flex-1" style={{ color: 'var(--text)' }}>
+                        {deal.name}
+                      </p>
+                      {deal.dealScore !== null && deal.dealScore !== undefined && (
+                        <span
+                          className="shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded-full"
+                          style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: 'var(--accent)', fontSize: '10px' }}
+                        >
+                          {deal.dealScore}
+                        </span>
+                      )}
+                    </div>
+                    {deal.address && (
+                      <p className="text-xs ml-[19px] truncate" style={{ color: 'var(--muted)' }}>{deal.address}</p>
+                    )}
+                    <p className="text-xs ml-[19px]" style={{ color: 'var(--muted)', opacity: 0.7 }}>
+                      {deal.status}
+                    </p>
+                  </button>
                 );
               })}
             </div>

@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import DashboardClient from './DashboardClient';
 import type { PropertyEntry } from '@/lib/models/portfolio';
+import type { DealEntry } from '@/lib/models/deal';
 
 export interface HistoryEntry {
   id: string;       // analyses.id (UUID)
@@ -58,11 +59,34 @@ export default async function DashboardPage() {
     statementCount: p.property_statements?.[0]?.count ?? 0,
   }));
 
+  const { data: dealsData } = await supabase
+    .from('deals')
+    .select('id, name, address, status, analysis, created_at')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+
+  const initialDeals: DealEntry[] = (dealsData ?? []).map((d: {
+    id: string;
+    name: string;
+    address?: string;
+    status: string;
+    analysis: { score?: { total?: number } } | null;
+    created_at: string;
+  }) => ({
+    id: d.id,
+    name: d.name,
+    address: d.address,
+    status: d.status as DealEntry['status'],
+    dealScore: d.analysis?.score?.total ?? undefined,
+    createdAt: d.created_at,
+  }));
+
   return (
     <DashboardClient
       userEmail={user.email ?? ''}
       initialHistory={history}
       initialProperties={initialProperties}
+      initialDeals={initialDeals}
     />
   );
 }

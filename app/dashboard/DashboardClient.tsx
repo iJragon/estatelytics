@@ -9,6 +9,7 @@ import type { AnalysisResult } from '@/lib/models/statement';
 import type { ChatMessage } from '@/lib/agents/chat-agent';
 import type { ChartSpec } from '@/lib/agents/viz-agent';
 import type { PropertyEntry, PropertyDetail, PropertyStatement, CrossYearFlag, PortfolioKeyMetric } from '@/lib/models/portfolio';
+import type { Deal, DealEntry } from '@/lib/models/deal';
 import type { HistoryEntry } from './page';
 import Sidebar from '@/components/dashboard/Sidebar';
 import SummaryTab from '@/components/dashboard/tabs/SummaryTab';
@@ -22,11 +23,13 @@ import ChatTab from '@/components/dashboard/tabs/ChatTab';
 import CustomChartsTab from '@/components/dashboard/tabs/CustomChartsTab';
 import BenchmarksTab from '@/components/dashboard/tabs/BenchmarksTab';
 import PropertyView from '@/components/portfolio/PropertyView';
+import DealView from '@/components/deals/DealView';
 
 interface DashboardClientProps {
   userEmail: string;
   initialHistory: HistoryEntry[];
   initialProperties: PropertyEntry[];
+  initialDeals: DealEntry[];
 }
 
 const ANALYSIS_TABS = [
@@ -45,7 +48,7 @@ const TOOL_TABS = [
   { id: 'charts', label: 'Charts' },
 ];
 
-export default function DashboardClient({ userEmail, initialHistory, initialProperties }: DashboardClientProps) {
+export default function DashboardClient({ userEmail, initialHistory, initialProperties, initialDeals }: DashboardClientProps) {
   const router = useRouter();
 
   // ── Analysis view state ────────────────────────────────────────────────────
@@ -68,9 +71,14 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
   const selectedFileRef = useRef<File | null>(null);
   const fileQueueRef = useRef<File[]>([]);
 
+  // ── Deals state ───────────────────────────────────────────────────────────
+  const [deals, setDeals] = useState<DealEntry[]>(initialDeals);
+  const [activeDeal, setActiveDeal] = useState<Deal | null>(null);
+  const [activeDealId, setActiveDealId] = useState<string | undefined>();
+
   // ── Portfolio view state ───────────────────────────────────────────────────
   const [properties, setProperties] = useState<PropertyEntry[]>(initialProperties);
-  const [activeView, setActiveView] = useState<'analysis' | 'property'>('analysis');
+  const [activeView, setActiveView] = useState<'analysis' | 'property' | 'deal'>('analysis');
   const [activePropertyId, setActivePropertyId] = useState<string | undefined>();
   const [propertyDetail, setPropertyDetail] = useState<PropertyDetail | null>(null);
   const [propertyAnalyses, setPropertyAnalyses] = useState<AnalysisResult[]>([]);
@@ -767,6 +775,53 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
     });
   }
 
+  // ── Deals ──────────────────────────────────────────────────────────────────
+  async function handleDealCreate(name: string, address?: string) {
+    const res = await fetch('/api/deals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, address }),
+    });
+    if (!res.ok) throw new Error('Failed to create deal');
+    const { deal } = await res.json() as { deal: DealEntry };
+    setDeals(prev => [deal, ...prev]);
+    await handleDealSelect(deal);
+  }
+
+  async function handleDealSelect(entry: DealEntry) {
+    setActiveView('deal');
+    setActiveDealId(entry.id);
+    try {
+      const res = await fetch(`/api/deals/${entry.id}`);
+      if (!res.ok) throw new Error('Failed to load deal');
+      const { deal } = await res.json() as { deal: Deal };
+      setActiveDeal(deal);
+      setDeals(prev => prev.map(d => d.id === deal.id
+        ? { ...d, status: deal.status, dealScore: deal.analysis?.score?.total ?? d.dealScore }
+        : d,
+      ));
+    } catch (err) {
+      console.error('Failed to load deal:', err);
+    }
+  }
+
+  function handleDealUpdate(updated: Deal) {
+    setActiveDeal(updated);
+    setDeals(prev => prev.map(d => d.id === updated.id
+      ? { ...d, status: updated.status, dealScore: updated.analysis?.score?.total ?? d.dealScore }
+      : d,
+    ));
+  }
+
+  function handleDealDelete(id: string) {
+    setDeals(prev => prev.filter(d => d.id !== id));
+    if (activeDealId === id) {
+      setActiveDeal(null);
+      setActiveDealId(undefined);
+      setActiveView('analysis');
+    }
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--bg)' }}>
@@ -790,15 +845,25 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
         onPropertyRename={handlePropertyRename}
         onPropertyAddressEdit={handlePropertyAddressEdit}
         onPropertyDelete={handlePropertyDelete}
-        onNavigateHome={() => { setActiveView('analysis'); setActivePropertyId(undefined); setAnalysis(null); }}
+        onNavigateHome={() => { setActiveView('analysis'); setActivePropertyId(undefined); setActiveDealId(undefined); setActiveDeal(null); setAnalysis(null); }}
         onSignOut={handleSignOut}
         loadingHistoryId={loadingHistoryId}
         loadingPropertyId={propertyLoading ? activePropertyId : undefined}
+        deals={deals}
+        activeDealId={activeDealId}
+        onDealSelect={handleDealSelect}
+        onDealCreate={handleDealCreate}
       />
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {activeView === 'property' && (propertyLoading || propertyDetail) ? (
+        {activeView === 'deal' && activeDeal ? (
+          <DealView
+            deal={activeDeal}
+            onUpdate={handleDealUpdate}
+            onDelete={handleDealDelete}
+          />
+        ) : activeView === 'property' && (propertyLoading || propertyDetail) ? (
           // ── Property portfolio view ────────────────────────────────────────
           propertyLoading ? (
             <div className="flex flex-col items-center justify-center h-full gap-4">
