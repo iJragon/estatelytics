@@ -158,17 +158,17 @@ function generateBirchwood() {
   const badDebt = -4200;
   const egi = gpr + otherIncome + vacancy + concessions + badDebt;
 
-  const taxes = 31200;
-  const insurance = 14400;
-  const utilities = 22800;          // tenant pays some, not all
-  const maintenance = 28800;        // deferred maintenance catching up
+  const taxes = 24000;
+  const insurance = 11400;
+  const utilities = 13200;          // tenant pays most
+  const maintenance = 18000;        // some deferred maintenance but manageable
   const mgmt = egi * 0.08;          // 8% (above market, struggling manager)
-  const landscaping = 8400;
-  const administrative = 6000;
-  const payroll = 18000;
+  const landscaping = 4800;
+  const administrative = 3600;
+  const payroll = 10800;
   const reserves = 7200;
-  const legal = 9600;               // evictions
-  const misc = 8400;
+  const legal = 4200;               // a few evictions
+  const misc = 3600;
 
   const totalExpenses = taxes + insurance + utilities + maintenance + mgmt + landscaping + administrative + payroll + reserves + legal + misc;
   const noi = egi - totalExpenses;
