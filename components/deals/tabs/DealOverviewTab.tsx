@@ -22,28 +22,42 @@ function fmt(n: number, type: 'dollar' | 'pct' | 'x' | 'int'): string {
   return n.toFixed(0);
 }
 
-const VERDICT_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  'strong-buy':  { label: 'Strong Buy',   color: '#15803d', bg: '#dcfce7' },
-  'buy':         { label: 'Buy',          color: '#16a34a', bg: '#f0fdf4' },
-  'conditional': { label: 'Conditional',  color: '#b45309', bg: '#fef3c7' },
-  'avoid':       { label: 'Avoid',        color: '#dc2626', bg: '#fee2e2' },
-  'strong-avoid':{ label: 'Strong Avoid', color: '#991b1b', bg: '#fecaca' },
-  'pass':        { label: 'Avoid',        color: '#dc2626', bg: '#fee2e2' },
-  'strong-pass': { label: 'Strong Avoid', color: '#991b1b', bg: '#fecaca' },
+const VERDICT_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  'strong-buy':  { label: 'Strong Buy',   color: '#15803d', bg: 'rgba(34,197,94,0.12)',  border: 'rgba(34,197,94,0.3)'  },
+  'buy':         { label: 'Buy',          color: '#16a34a', bg: 'rgba(34,197,94,0.08)',  border: 'rgba(34,197,94,0.2)'  },
+  'conditional': { label: 'Conditional',  color: '#b45309', bg: 'rgba(234,179,8,0.12)',  border: 'rgba(234,179,8,0.3)'  },
+  'avoid':       { label: 'Avoid',        color: '#dc2626', bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.3)'  },
+  'strong-avoid':{ label: 'Strong Avoid', color: '#991b1b', bg: 'rgba(239,68,68,0.16)',  border: 'rgba(239,68,68,0.35)' },
+  'pass':        { label: 'Avoid',        color: '#dc2626', bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.3)'  },
+  'strong-pass': { label: 'Strong Avoid', color: '#991b1b', bg: 'rgba(239,68,68,0.16)',  border: 'rgba(239,68,68,0.35)' },
 };
 
 const FALLBACK_VERDICT = VERDICT_CONFIG['avoid'];
 
-function MetricRow({ label, value, good }: { label: string; value: string; good?: boolean | null }) {
+function MetricRow({ label, value, good, indent }: { label: string; value: string; good?: boolean | null; indent?: boolean }) {
   return (
-    <div className="flex justify-between items-center py-2" style={{ borderBottom: '1px solid var(--border)' }}>
-      <span className="text-sm" style={{ color: 'var(--muted)' }}>{label}</span>
+    <div
+      className="flex justify-between items-center py-2"
+      style={{ borderBottom: '1px solid var(--border)', paddingLeft: indent ? '0.75rem' : undefined }}
+    >
+      <span className="text-sm" style={{ color: indent ? 'var(--muted)' : 'var(--text)', opacity: indent ? 0.8 : 1 }}>{label}</span>
       <span
-        className="text-sm font-medium"
+        className="text-sm font-medium tabular-nums"
         style={{ color: good === true ? 'var(--success)' : good === false ? 'var(--danger)' : 'var(--text)' }}
       >
         {value}
       </span>
+    </div>
+  );
+}
+
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'var(--surface)' }}>
+        <h4 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>{title}</h4>
+      </div>
+      <div className="px-4 pb-1">{children}</div>
     </div>
   );
 }
@@ -53,141 +67,138 @@ function ScoreBar({ label, score, max = 25 }: { label: string; score: number; ma
   const color = pct >= 70 ? 'var(--success)' : pct >= 40 ? 'var(--warning)' : 'var(--danger)';
   return (
     <div className="mb-3">
-      <div className="flex justify-between mb-1">
+      <div className="flex justify-between mb-1.5">
         <span className="text-xs" style={{ color: 'var(--muted)' }}>{label}</span>
-        <span className="text-xs font-medium" style={{ color: 'var(--text)' }}>{score}/{max}</span>
+        <span className="text-xs font-semibold tabular-nums" style={{ color }}>{score}<span style={{ color: 'var(--muted)', fontWeight: 400 }}>/25</span></span>
       </div>
       <div className="h-1.5 rounded-full" style={{ backgroundColor: 'var(--border)' }}>
-        <div
-          className="h-1.5 rounded-full transition-all"
-          style={{ width: `${pct}%`, backgroundColor: color }}
-        />
+        <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
       </div>
+    </div>
+  );
+}
+
+function KpiCard({ value, label, color }: { value: string; label: string; color?: string }) {
+  return (
+    <div className="card flex flex-col items-center justify-center py-4 text-center">
+      <div className="text-2xl font-bold tabular-nums" style={{ color: color ?? 'var(--text)' }}>{value}</div>
+      <div className="text-xs mt-1" style={{ color: 'var(--muted)' }}>{label}</div>
     </div>
   );
 }
 
 export default function DealOverviewTab({ metrics: m, score, inputs }: Props) {
   const verdict = VERDICT_CONFIG[score.verdict] ?? FALLBACK_VERDICT;
-  const totalInvested = m.totalCashInvested;
 
   return (
     <div className="p-4 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 220px)' }}>
 
       {/* Score Card */}
-      <div className="card">
-        <div className="flex items-start justify-between mb-4">
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {/* Verdict banner */}
+        <div
+          className="px-4 py-3 flex items-center justify-between"
+          style={{ backgroundColor: verdict.bg, borderBottom: `1px solid ${verdict.border}` }}
+        >
           <div>
-            <h3 className="font-semibold text-base" style={{ color: 'var(--text)' }}>Deal Score</h3>
-            <div
-              className="mt-1 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold"
-              style={{ backgroundColor: verdict.bg, color: verdict.color }}
-            >
-              {verdict.label}
-            </div>
+            <p className="text-xs font-medium uppercase tracking-widest mb-0.5" style={{ color: verdict.color, opacity: 0.7 }}>Verdict</p>
+            <p className="text-lg font-bold" style={{ color: verdict.color }}>{verdict.label}</p>
           </div>
           <div className="text-right">
-            <div className="text-4xl font-bold" style={{ color: 'var(--accent)' }}>{score.total}</div>
-            <div className="text-xs" style={{ color: 'var(--muted)' }}>out of 100</div>
+            <span className="text-4xl font-bold tabular-nums" style={{ color: verdict.color }}>{score.total}</span>
+            <span className="text-sm ml-1" style={{ color: verdict.color, opacity: 0.6 }}>/100</span>
           </div>
         </div>
-        <ScoreBar label="Cash Flow" score={score.cashFlowScore} />
-        <ScoreBar label="Returns" score={score.returnScore} />
-        <ScoreBar label="Safety" score={score.safetyScore} />
-        <ScoreBar label="Growth" score={score.growthScore} />
+
+        {/* Score bars */}
+        <div className="px-4 pt-3 pb-1">
+          <ScoreBar label="Cash Flow" score={score.cashFlowScore} />
+          <ScoreBar label="Returns"   score={score.returnScore} />
+          <ScoreBar label="Safety"    score={score.safetyScore} />
+          <ScoreBar label="Growth"    score={score.growthScore} />
+        </div>
       </div>
 
-      {/* Key Metrics Grid */}
+      {/* KPI grid */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="card text-center">
-          <div className="text-xl font-bold" style={{ color: 'var(--text)' }}>{fmt(m.capRate, 'pct')}</div>
-          <div className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Cap Rate</div>
-        </div>
-        <div className="card text-center">
-          <div className="text-xl font-bold" style={{ color: m.cashOnCash >= 0.07 ? 'var(--success)' : m.cashOnCash >= 0.04 ? 'var(--warning)' : 'var(--danger)' }}>
-            {fmt(m.cashOnCash, 'pct')}
-          </div>
-          <div className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Cash-on-Cash</div>
-        </div>
-        <div className="card text-center">
-          <div className="text-xl font-bold" style={{ color: m.irr >= 0.12 ? 'var(--success)' : m.irr >= 0.08 ? 'var(--warning)' : 'var(--danger)' }}>
-            {fmt(m.irr, 'pct')}
-          </div>
-          <div className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>IRR</div>
-        </div>
-        <div className="card text-center">
-          <div className="text-xl font-bold" style={{ color: m.dscr >= 1.25 ? 'var(--success)' : m.dscr >= 1.0 ? 'var(--warning)' : 'var(--danger)' }}>
-            {fmt(m.dscr, 'x')}
-          </div>
-          <div className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>DSCR</div>
-        </div>
+        <KpiCard value={fmt(m.capRate, 'pct')} label="Cap Rate" />
+        <KpiCard
+          value={fmt(m.cashOnCash, 'pct')}
+          label="Cash-on-Cash"
+          color={m.cashOnCash >= 0.07 ? 'var(--success)' : m.cashOnCash >= 0.04 ? 'var(--warning)' : 'var(--danger)'}
+        />
+        <KpiCard
+          value={fmt(m.irr, 'pct')}
+          label="IRR"
+          color={m.irr >= 0.12 ? 'var(--success)' : m.irr >= 0.08 ? 'var(--warning)' : 'var(--danger)'}
+        />
+        <KpiCard
+          value={fmt(m.dscr, 'x')}
+          label="DSCR"
+          color={m.dscr >= 1.25 ? 'var(--success)' : m.dscr >= 1.0 ? 'var(--warning)' : 'var(--danger)'}
+        />
       </div>
 
       {/* Income & Expenses */}
-      <div className="card">
-        <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>Income & Expenses (Year 1)</h4>
-        <MetricRow label="Gross Scheduled Income" value={fmt(m.grossScheduledIncome, 'dollar')} />
-        <MetricRow label="Vacancy Loss" value={`-${fmt(m.vacancyLoss, 'dollar')}`} good={false} />
-        <MetricRow label="Effective Gross Income" value={fmt(m.effectiveGrossIncome, 'dollar')} />
-        <MetricRow label="Total Operating Expenses" value={`-${fmt(m.totalOperatingExpenses, 'dollar')}`} good={false} />
-        <MetricRow label="Net Operating Income" value={fmt(m.noi, 'dollar')} good={m.noi > 0} />
-        <MetricRow label="Operating Expense Ratio" value={fmt(m.operatingExpenseRatio, 'pct')} good={m.operatingExpenseRatio < 0.5} />
-      </div>
+      <SectionCard title="Income & Expenses — Year 1">
+        <MetricRow label="Gross Scheduled Income"  value={fmt(m.grossScheduledIncome, 'dollar')} />
+        <MetricRow label="Vacancy Loss"            value={`-${fmt(m.vacancyLoss, 'dollar')}`} good={false} indent />
+        <MetricRow label="Effective Gross Income"  value={fmt(m.effectiveGrossIncome, 'dollar')} />
+        <MetricRow label="Operating Expenses"      value={`-${fmt(m.totalOperatingExpenses, 'dollar')}`} good={false} indent />
+        <MetricRow label="Net Operating Income"    value={fmt(m.noi, 'dollar')} good={m.noi > 0} />
+        <MetricRow label="Expense Ratio"           value={fmt(m.operatingExpenseRatio, 'pct')} good={m.operatingExpenseRatio < 0.5} indent />
+      </SectionCard>
 
       {/* Financing */}
-      <div className="card">
-        <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>Financing</h4>
-        <MetricRow label="Loan Amount" value={fmt(m.loanAmount, 'dollar')} />
-        <MetricRow label="LTV" value={fmt(m.ltv, 'pct')} good={m.ltv <= 0.80} />
-        <MetricRow label="Monthly Payment" value={fmt(m.monthlyPayment, 'dollar')} />
-        <MetricRow label="Annual Debt Service" value={fmt(m.annualDebtService, 'dollar')} />
-        <MetricRow label="Mortgage Constant" value={fmt(m.mortgageConstant, 'pct')} />
+      <SectionCard title="Financing">
+        <MetricRow label="Loan Amount"          value={fmt(m.loanAmount, 'dollar')} />
+        <MetricRow label="LTV"                  value={fmt(m.ltv, 'pct')} good={m.ltv <= 0.80} indent />
+        <MetricRow label="Monthly Payment"      value={fmt(m.monthlyPayment, 'dollar')} />
+        <MetricRow label="Annual Debt Service"  value={fmt(m.annualDebtService, 'dollar')} indent />
+        <MetricRow label="Mortgage Constant"    value={fmt(m.mortgageConstant, 'pct')} indent />
         <MetricRow label="Max Loan (1.25x DSCR)" value={fmt(m.maxLoanAmount, 'dollar')} />
-        <MetricRow label="Closing Costs" value={fmt(m.closingCosts, 'dollar')} />
-        <MetricRow label="Total Cash Invested" value={fmt(totalInvested, 'dollar')} />
-      </div>
+        <MetricRow label="Closing Costs"        value={fmt(m.closingCosts, 'dollar')} indent />
+        <MetricRow label="Total Cash Invested"  value={fmt(m.totalCashInvested, 'dollar')} />
+      </SectionCard>
 
       {/* Cash Flow */}
-      <div className="card">
-        <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>Cash Flow</h4>
-        <MetricRow label="Cash Flow Before Tax" value={fmt(m.cashFlowBeforeTax, 'dollar')} good={m.cashFlowBeforeTax > 0} />
-        <MetricRow label="After-Tax Cash Flow" value={fmt(m.afterTaxCashFlow, 'dollar')} good={m.afterTaxCashFlow > 0} />
-        <MetricRow label="Break-Even Occupancy" value={fmt(m.breakEvenOccupancy, 'pct')} good={m.breakEvenOccupancy < 0.75} />
-        <MetricRow label="Annual Depreciation" value={fmt(m.annualDepreciation, 'dollar')} />
-        <MetricRow label="Taxable Income" value={fmt(m.taxableIncome, 'dollar')} />
-      </div>
+      <SectionCard title="Cash Flow">
+        <MetricRow label="Cash Flow Before Tax"  value={fmt(m.cashFlowBeforeTax, 'dollar')} good={m.cashFlowBeforeTax > 0} />
+        <MetricRow label="After-Tax Cash Flow"   value={fmt(m.afterTaxCashFlow, 'dollar')}  good={m.afterTaxCashFlow > 0} indent />
+        <MetricRow label="Break-Even Occupancy"  value={fmt(m.breakEvenOccupancy, 'pct')}   good={m.breakEvenOccupancy < 0.75} />
+        <MetricRow label="Annual Depreciation"   value={fmt(m.annualDepreciation, 'dollar')} indent />
+        <MetricRow label="Taxable Income"        value={fmt(m.taxableIncome, 'dollar')} />
+      </SectionCard>
 
       {/* Time Value */}
-      <div className="card">
-        <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>Time Value & Returns</h4>
-        <MetricRow label="NPV" value={fmt(m.npv, 'dollar')} good={m.npv > 0} />
-        <MetricRow label="IRR" value={fmt(m.irr, 'pct')} good={m.irr >= 0.12} />
-        <MetricRow label="MIRR" value={fmt(m.mirr, 'pct')} good={m.mirr >= 0.10} />
+      <SectionCard title="Time Value & Returns">
+        <MetricRow label="NPV"                value={fmt(m.npv, 'dollar')} good={m.npv > 0} />
+        <MetricRow label="IRR"                value={fmt(m.irr, 'pct')}   good={m.irr >= 0.12} />
+        <MetricRow label="MIRR"               value={fmt(m.mirr, 'pct')}  good={m.mirr >= 0.10} indent />
         <MetricRow label="Profitability Index" value={fmt(m.profitabilityIndex, 'x')} good={m.profitabilityIndex > 1} />
-        <MetricRow label="Payback Period" value={`${m.paybackPeriod} yr`} good={m.paybackPeriod <= inputs.holdPeriod} />
-        <MetricRow label="DCF Value" value={fmt(m.dcfValue, 'dollar')} />
-        <MetricRow label="Gross Rent Multiplier" value={fmt(m.grm, 'x')} />
-      </div>
+        <MetricRow label="Payback Period"     value={`${m.paybackPeriod} yr`} good={m.paybackPeriod <= inputs.holdPeriod} indent />
+        <MetricRow label="DCF Value"          value={fmt(m.dcfValue, 'dollar')} />
+        <MetricRow label="Gross Rent Multiplier" value={fmt(m.grm, 'x')} indent />
+      </SectionCard>
 
       {/* Exit */}
-      <div className="card">
-        <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>Exit Analysis (Year {inputs.holdPeriod})</h4>
-        <MetricRow label="Projected Sale Price" value={fmt(m.projectedSalePrice, 'dollar')} />
-        <MetricRow label="Selling Costs" value={`-${fmt(m.sellingCosts, 'dollar')}`} good={false} />
-        <MetricRow label="Remaining Loan Balance" value={`-${fmt(m.remainingLoanBalance, 'dollar')}`} good={false} />
-        <MetricRow label="Net Reversion (Equity)" value={fmt(m.reversion, 'dollar')} good={m.reversion > 0} />
-        <MetricRow label="Long-Term Capital Gain" value={fmt(m.longTermCapitalGain, 'dollar')} />
-      </div>
+      <SectionCard title={`Exit Analysis — Year ${inputs.holdPeriod}`}>
+        <MetricRow label="Projected Sale Price"    value={fmt(m.projectedSalePrice, 'dollar')} />
+        <MetricRow label="Selling Costs"           value={`-${fmt(m.sellingCosts, 'dollar')}`} good={false} indent />
+        <MetricRow label="Remaining Loan Balance"  value={`-${fmt(m.remainingLoanBalance, 'dollar')}`} good={false} indent />
+        <MetricRow label="Net Reversion"           value={fmt(m.reversion, 'dollar')} good={m.reversion > 0} />
+        <MetricRow label="Long-Term Capital Gain"  value={fmt(m.longTermCapitalGain, 'dollar')} indent />
+      </SectionCard>
 
       {/* Four Returns */}
-      <div className="card">
-        <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>Four Returns (Total over {inputs.holdPeriod} Years)</h4>
-        <MetricRow label="1. Cash Flow" value={fmt(m.totalCashFlow, 'dollar')} good={m.totalCashFlow > 0} />
-        <MetricRow label="2. Appreciation" value={fmt(m.totalAppreciation, 'dollar')} good={m.totalAppreciation > 0} />
-        <MetricRow label="3. Loan Amortization" value={fmt(m.totalAmortization, 'dollar')} good={m.totalAmortization > 0} />
-        <MetricRow label="4. Tax Benefit" value={fmt(m.totalTaxBenefit, 'dollar')} good={m.totalTaxBenefit > 0} />
-        <MetricRow label="Overall Return on Investment" value={fmt(m.overallReturn, 'pct')} good={m.overallReturn > 1.0} />
-      </div>
+      <SectionCard title={`Four Returns — ${inputs.holdPeriod}-Year Total`}>
+        <MetricRow label="1. Cash Flow"       value={fmt(m.totalCashFlow, 'dollar')}    good={m.totalCashFlow > 0} />
+        <MetricRow label="2. Appreciation"    value={fmt(m.totalAppreciation, 'dollar')} good={m.totalAppreciation > 0} />
+        <MetricRow label="3. Amortization"    value={fmt(m.totalAmortization, 'dollar')} good={m.totalAmortization > 0} />
+        <MetricRow label="4. Tax Benefit"     value={fmt(m.totalTaxBenefit, 'dollar')}  good={m.totalTaxBenefit > 0} />
+        <MetricRow label="Overall Return"     value={fmt(m.overallReturn, 'pct')} good={m.overallReturn > 1.0} />
+      </SectionCard>
+
     </div>
   );
 }
