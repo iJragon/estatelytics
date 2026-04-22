@@ -91,7 +91,7 @@ Return this exact JSON shape (all values in whole dollars per year, 0 if not fou
 
 Rules:
 - grossScheduledIncome = maximum possible rental income (100% occupied, no vacancy)
-- otherIncome = laundry, parking, fees, etc. — NOT rent
+- otherIncome = laundry, parking, fees, etc. (NOT rent)
 - Do NOT include vacancy loss in any expense; leave it for the user's vacancy rate assumption
 - For expense categories, sum all relevant sub-lines into the best-fit category
 - If a figure genuinely cannot be found, use 0
@@ -120,7 +120,7 @@ Rules:
   try {
     extracted = JSON.parse(jsonStr);
   } catch {
-    return NextResponse.json({ error: 'AI extraction failed — could not parse response', raw }, { status: 422 });
+    return NextResponse.json({ error: 'AI extraction failed: could not parse response', raw }, { status: 422 });
   }
 
   return NextResponse.json({

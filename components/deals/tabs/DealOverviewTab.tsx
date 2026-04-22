@@ -9,7 +9,7 @@ interface Props {
 }
 
 function fmt(n: number, type: 'dollar' | 'pct' | 'x' | 'int'): string {
-  if (!isFinite(n)) return '—';
+  if (!isFinite(n)) return 'N/A';
   if (type === 'dollar') {
     const abs = Math.abs(n);
     const sign = n < 0 ? '-' : '';
@@ -140,7 +140,7 @@ export default function DealOverviewTab({ metrics: m, score, inputs }: Props) {
       </div>
 
       {/* Income & Expenses */}
-      <SectionCard title="Income & Expenses — Year 1">
+      <SectionCard title="Income & Expenses: Year 1">
         <MetricRow label="Gross Scheduled Income"  value={fmt(m.grossScheduledIncome, 'dollar')} />
         <MetricRow label="Vacancy Loss"            value={`-${fmt(m.vacancyLoss, 'dollar')}`} good={false} indent />
         <MetricRow label="Effective Gross Income"  value={fmt(m.effectiveGrossIncome, 'dollar')} />
@@ -182,7 +182,7 @@ export default function DealOverviewTab({ metrics: m, score, inputs }: Props) {
       </SectionCard>
 
       {/* Exit */}
-      <SectionCard title={`Exit Analysis — Year ${inputs.holdPeriod}`}>
+      <SectionCard title={`Exit Analysis: Year ${inputs.holdPeriod}`}>
         <MetricRow label="Projected Sale Price"    value={fmt(m.projectedSalePrice, 'dollar')} />
         <MetricRow label="Selling Costs"           value={`-${fmt(m.sellingCosts, 'dollar')}`} good={false} indent />
         <MetricRow label="Remaining Loan Balance"  value={`-${fmt(m.remainingLoanBalance, 'dollar')}`} good={false} indent />
@@ -191,7 +191,7 @@ export default function DealOverviewTab({ metrics: m, score, inputs }: Props) {
       </SectionCard>
 
       {/* Four Returns */}
-      <SectionCard title={`Four Returns — ${inputs.holdPeriod}-Year Total`}>
+      <SectionCard title={`Four Returns: ${inputs.holdPeriod}-Year Total`}>
         <MetricRow label="1. Cash Flow"       value={fmt(m.totalCashFlow, 'dollar')}    good={m.totalCashFlow > 0} />
         <MetricRow label="2. Appreciation"    value={fmt(m.totalAppreciation, 'dollar')} good={m.totalAppreciation > 0} />
         <MetricRow label="3. Amortization"    value={fmt(m.totalAmortization, 'dollar')} good={m.totalAmortization > 0} />

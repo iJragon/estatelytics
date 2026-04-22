@@ -9,7 +9,7 @@ interface Props {
 }
 
 function fmt(n: number | undefined, type: 'dollar' | 'pct' | 'x' | 'int'): string {
-  if (n === undefined || !isFinite(n)) return '—';
+  if (n === undefined || !isFinite(n)) return 'N/A';
   if (type === 'dollar') {
     const abs = Math.abs(n);
     const sign = n < 0 ? '-' : '';
@@ -102,7 +102,7 @@ export default function DealCompareView({ deals, onClose, onSelectDeal }: Props)
       >
         <div>
           <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
-            Deal Comparison — {deals.length} deal{deals.length !== 1 ? 's' : ''}
+            Deal Comparison: {deals.length} deal{deals.length !== 1 ? 's' : ''}
           </h2>
           <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
             Green = best value · Red = worst value · Click a deal name to open it

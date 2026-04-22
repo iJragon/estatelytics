@@ -25,7 +25,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
   }
   if (!data.analysis) {
-    return NextResponse.json({ error: 'Deal has no analysis yet — run Analyze first' }, { status: 400 });
+    return NextResponse.json({ error: 'Deal has no analysis yet. Run Analyze first.' }, { status: 400 });
   }
 
   const deal: Deal = {

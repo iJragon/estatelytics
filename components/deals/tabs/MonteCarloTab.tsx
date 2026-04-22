@@ -8,7 +8,7 @@ interface Props {
 }
 
 function fmtPct(n: number): string {
-  if (!isFinite(n)) return '—';
+  if (!isFinite(n)) return 'N/A';
   return `${(n * 100).toFixed(2)}%`;
 }
 
@@ -98,7 +98,7 @@ export default function MonteCarloTab({ result }: Props) {
           <div>
             <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text)' }}>What is Monte Carlo?</p>
             <p className="text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
-              Monte Carlo simulation runs {iterations.toLocaleString()} randomized versions of this deal, each with slightly different vacancy rates, rent growth, expense growth, and exit cap rates sampled from realistic probability distributions. The results show how sensitive your returns are to real-world variability — not just the single &ldquo;base case&rdquo; scenario.
+              Monte Carlo simulation runs {iterations.toLocaleString()} randomized versions of this deal, each with slightly different vacancy rates, rent growth, expense growth, and exit cap rates sampled from realistic probability distributions. The results show how sensitive your returns are to real-world variability, not just the single &ldquo;base case&rdquo; scenario.
             </p>
           </div>
         </div>
@@ -126,7 +126,7 @@ export default function MonteCarloTab({ result }: Props) {
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <div className="px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'var(--surface)' }}>
           <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>
-            Return Percentiles — {iterations.toLocaleString()} Simulations
+            Return Percentiles: {iterations.toLocaleString()} Simulations
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -166,7 +166,7 @@ export default function MonteCarloTab({ result }: Props) {
       {/* Scatter plot */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>
-          IRR vs Cash-on-Cash — {samples.length} Sample Scenarios
+          IRR vs Cash-on-Cash: {samples.length} Sample Scenarios
         </p>
         <PlotlyChart
           data={scatterData}

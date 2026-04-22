@@ -8,16 +8,16 @@ export const GLOSSARY: Record<string, string> = {
   'Gross Revenue': 'Total income collected from rents and other sources after vacancies and deductions. Also called Effective Gross Income.',
   'Net Rental Revenue': 'Gross potential rent minus vacancy, concessions, and bad debt. The actual rental income collected.',
   'Other Tenant Charges': 'Additional income beyond base rent: parking fees, pet fees, laundry, late charges, and miscellaneous tenant income.',
-  'Total Revenue': 'All income from the property combined — net rental revenue plus other tenant charges. The top-line number.',
+  'Total Revenue': 'All income from the property combined: net rental revenue plus other tenant charges. The top-line number.',
   'Net Operating Income': 'Revenue minus all operating expenses, before any debt payments. The primary profitability metric for rental property. Often called NOI.',
   'Net Income': 'Profit remaining after ALL expenses including debt service and non-operating items. The true bottom line.',
   'Cash Flow': 'Actual cash in or out of the property after every expense. Differs from net income due to non-cash accounting items like depreciation.',
 
   // ── Expenses ─────────────────────────────────────────────────────────────
-  'Total Operating Expenses': 'All costs to run the property: payroll, utilities, taxes, insurance, maintenance, and management fees — before debt service.',
+  'Total Operating Expenses': 'All costs to run the property: payroll, utilities, taxes, insurance, maintenance, and management fees, before debt service.',
   'Controllable Expenses': 'Costs management can directly reduce: payroll, repairs, marketing, and supplies.',
   'Non-Controllable Expenses': 'Fixed costs management cannot easily change: property taxes, insurance, and replacement reserves.',
-  'Financial Expense': 'Debt service payments — mortgage principal and interest. Also called below-the-line expenses since they come after NOI.',
+  'Financial Expense': 'Debt service payments: mortgage principal and interest. Also called below-the-line expenses since they come after NOI.',
   'Replacement Reserve': 'Money set aside for future capital repairs like roofs, HVAC, and appliances. Treated as an expense even if not spent immediately.',
 
   // ── Loss Items ───────────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ export const GLOSSARY: Record<string, string> = {
   'NOI Margin': 'Net Operating Income as a % of gross revenue. Healthy multifamily properties target 45%-65%.',
   'Vacancy Rate': '% of potential rent lost to empty units. Industry target is under 7%. High vacancy points to a leasing or retention problem.',
   'Concession Rate': 'Rent concessions as a % of gross potential rent. High concessions often signal a soft leasing market.',
-  'Bad Debt Rate': 'Uncollected rent as a % of revenue. Above 1% warrants attention — may signal collections or tenant quality issues.',
+  'Bad Debt Rate': 'Uncollected rent as a % of revenue. Above 1% warrants attention and may signal collections or tenant quality issues.',
   'Payroll %': 'Staff and personnel costs as a percentage of total revenue. Typically 10%-25% for multifamily.',
   'Management Fee %': 'Property management company fees as a % of revenue. Industry standard is 4%-8%.',
   'Controllable Expense %': 'The share of total expenses that management can directly reduce, like maintenance or staffing.',
@@ -43,11 +43,11 @@ export const GLOSSARY: Record<string, string> = {
   // ── Investment Metrics ───────────────────────────────────────────────────
   'Cap Rate': 'Annual NOI divided by the purchase price, as a percentage. Higher cap rate = better return but sometimes higher risk. Multifamily typically trades at 4%-8% cap rates depending on market.',
   'Cash-on-Cash Return': 'Annual cash flow after debt service divided by your actual cash invested (equity). Measures the return on out-of-pocket dollars. Investors typically target 8%+.',
-  'Gross Rent Multiplier': 'Purchase price divided by annual gross revenue. A quick valuation shortcut — lower GRM means a better price relative to income. Typical range is 8x-15x.',
+  'Gross Rent Multiplier': 'Purchase price divided by annual gross revenue. A quick valuation shortcut. Lower GRM means a better price relative to income. Typical range is 8x-15x.',
   'Loan-to-Value': 'Loan balance as a % of the property value. Lenders use this to assess risk. Above 80% is considered high leverage. Below 75% is conservative.',
   'Debt Yield': 'NOI as a % of the loan balance. Used by lenders to stress-test a loan independent of interest rates. Most lenders want 8%+ before lending.',
   'NOI per Unit': 'Annual Net Operating Income divided by total unit count. Standard way to compare profitability across properties of different sizes.',
-  'Price per Unit': 'Purchase price divided by total units. A common shorthand for valuing multifamily properties — higher means a premium market or asset quality.',
+  'Price per Unit': 'Purchase price divided by total units. A common shorthand for valuing multifamily properties. Higher means a premium market or asset quality.',
 
   // ── Productivity Metrics ─────────────────────────────────────────────────
   'NOI per Payroll Dollar': 'For every $1 spent on staff, how much NOI is generated. A direct measure of labor efficiency. Higher means staff costs are well-justified by income produced.',
@@ -62,12 +62,12 @@ export const GLOSSARY: Record<string, string> = {
   'Purchase Price': 'The price paid to acquire this property. Used to calculate cap rate, price per unit, GRM, and cash-on-cash return. Enter as a full number (e.g. 6500000).',
   'Market Value': 'Current estimated market value of the property. Used for LTV calculation. If blank, purchase price is used instead.',
   'Loan Balance': 'Outstanding principal on the property mortgage or loan. Used for LTV, debt yield, and cash-on-cash calculations.',
-  'Interest Rate': 'Annual interest rate on the mortgage, as a percentage. For reference only — actual debt service input is used for calculations.',
+  'Interest Rate': 'Annual interest rate on the mortgage, as a percentage. For reference only. Actual debt service input is used for calculations.',
   'Annual Debt Service': 'Total annual mortgage payments including both principal and interest. Used for DSCR and cash-on-cash calculations.',
 
   // ── Statement / App Concepts ─────────────────────────────────────────────
   'Book Type': 'The accounting method used in this statement. Accrual records income and expenses when earned or incurred; Cash records only when money actually changes hands.',
-  'Statement Explorer': 'Browse every row parsed from your uploaded spreadsheet. Pin any row to surface it as a custom metric — useful for line items your statement contains that the standard model does not recognize.',
+  'Statement Explorer': 'Browse every row parsed from your uploaded spreadsheet. Pin any row to surface it as a custom metric, useful for line items your statement contains that the standard model does not recognize.',
 };
 
 interface TooltipProps {

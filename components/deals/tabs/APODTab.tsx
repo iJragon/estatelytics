@@ -9,7 +9,7 @@ interface Props {
 }
 
 function fmtDollar(n: number): string {
-  if (!isFinite(n)) return '—';
+  if (!isFinite(n)) return 'N/A';
   const abs = Math.abs(n);
   const sign = n < 0 ? '-' : '';
   if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(3)}M`;
@@ -17,12 +17,12 @@ function fmtDollar(n: number): string {
 }
 
 function fmtPct(n: number, decimals = 1): string {
-  if (!isFinite(n)) return '—';
+  if (!isFinite(n)) return 'N/A';
   return `${(n * 100).toFixed(decimals)}%`;
 }
 
 function fmtX(n: number): string {
-  if (!isFinite(n)) return '—';
+  if (!isFinite(n)) return 'N/A';
   return `${n.toFixed(2)}x`;
 }
 
@@ -138,7 +138,7 @@ export default function APODTab({ metrics: m, inputs, proForma }: Props) {
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs uppercase tracking-widest opacity-80 mb-1">Annual Property Operating Data</p>
-            <p className="text-lg font-bold">APOD Report — Year 1</p>
+            <p className="text-lg font-bold">APOD Report: Year 1</p>
             <p className="text-xs opacity-70 mt-1">{propertyType} Property · As of {today}</p>
           </div>
           <div className="text-right text-xs opacity-70">
@@ -218,7 +218,7 @@ export default function APODTab({ metrics: m, inputs, proForma }: Props) {
             <Row
               label="Total Operating Expenses"
               value={fmtDollar(m.totalOperatingExpenses)}
-              pct={totalEGI > 0 ? fmtPct(m.totalOperatingExpenses / totalEGI) : '—'}
+              pct={totalEGI > 0 ? fmtPct(m.totalOperatingExpenses / totalEGI) : 'N/A'}
               bold
               shade
               borderTop
@@ -229,7 +229,7 @@ export default function APODTab({ metrics: m, inputs, proForma }: Props) {
             <Row
               label="Net Operating Income (NOI)"
               value={fmtDollar(m.noi)}
-              pct={totalEGI > 0 ? fmtPct(m.noi / totalEGI) : '—'}
+              pct={totalEGI > 0 ? fmtPct(m.noi / totalEGI) : 'N/A'}
               bold
               shade
             />

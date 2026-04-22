@@ -68,18 +68,16 @@ const TAX_BRACKETS = [
 export default function InvestorProfilePanel({ profile, onSave, onClose }: Props) {
   const [draft, setDraft] = useState<InvestorProfile>({ ...profile });
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   function set<K extends keyof InvestorProfile>(key: K, value: InvestorProfile[K]) {
     setDraft(prev => ({ ...prev, [key]: value }));
-    setSaved(false);
   }
 
   async function handleSave() {
     setSaving(true);
     try {
       await onSave(draft);
-      setSaved(true);
+      onClose();
     } finally {
       setSaving(false);
     }
@@ -201,7 +199,7 @@ export default function InvestorProfilePanel({ profile, onSave, onClose }: Props
               disabled={saving}
               className="btn-primary flex-1 py-2.5 text-sm"
             >
-              {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save Profile'}
+              {saving ? 'Saving…' : 'Save Profile'}
             </button>
             <button
               onClick={onClose}
@@ -211,11 +209,6 @@ export default function InvestorProfilePanel({ profile, onSave, onClose }: Props
               Close
             </button>
           </div>
-          {saved && (
-            <p className="text-xs text-center mt-2" style={{ color: 'var(--muted)' }}>
-              Re-analyze any deal to apply the updated targets.
-            </p>
-          )}
         </div>
       </div>
     </div>

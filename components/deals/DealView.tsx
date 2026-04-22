@@ -20,6 +20,7 @@ interface Props {
   onDelete: (id: string) => void;
   onShowProfile: () => void;
   onViewInPortfolio?: (propertyId: string) => void;
+  onPropertyLinked?: () => void;
   history?: HistoryEntry[];
   properties?: PropertyEntry[];
   investorProfile?: InvestorProfile | null;
@@ -57,6 +58,7 @@ export default function DealView({
   onDelete,
   onShowProfile,
   onViewInPortfolio,
+  onPropertyLinked,
   history,
   properties = [],
 }: Props) {
@@ -66,7 +68,6 @@ export default function DealView({
   const [streamingNarrative, setStreamingNarrative] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
@@ -149,16 +150,6 @@ export default function DealView({
     }
   }, [deal, onUpdate]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleDelete = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/deals/${deal.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Delete failed');
-      onDelete(deal.id);
-    } catch {
-      setError('Failed to delete deal.');
-      setConfirmDelete(false);
-    }
-  }, [deal.id, onDelete]);
 
   async function handleStatusChange(newStatus: Deal['status']) {
     setShowStatusMenu(false);
@@ -214,7 +205,7 @@ export default function DealView({
             ← Back
           </button>
           <h2 className="text-base font-semibold" style={{ color: 'var(--text)' }}>
-            Edit Deal Inputs — {deal.name}
+            Edit Inputs: {deal.name}
           </h2>
         </div>
         <div className="flex-1 overflow-hidden">
@@ -388,26 +379,6 @@ export default function DealView({
               </div>
             )}
 
-            {/* Delete */}
-            {!confirmDelete ? (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="p-1.5 rounded"
-                style={{ color: 'var(--muted)' }}
-                title="Delete deal"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-                  <path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
-                </svg>
-              </button>
-            ) : (
-              <div className="flex items-center gap-1">
-                <span className="text-xs" style={{ color: 'var(--muted)' }}>Delete?</span>
-                <button onClick={handleDelete} className="text-xs px-2 py-1 rounded" style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>Yes</button>
-                <button onClick={() => setConfirmDelete(false)} className="text-xs px-2 py-1 rounded" style={{ backgroundColor: 'var(--surface)', color: 'var(--muted)', border: '1px solid var(--border)' }}>No</button>
-              </div>
-            )}
           </div>
         </div>
 
@@ -518,6 +489,7 @@ export default function DealView({
           onLinked={(propertyId, _name) => {
             setShowLinkModal(false);
             onUpdate({ ...deal, propertyId, status: 'converted' });
+            onPropertyLinked?.();
           }}
           onUnlinked={() => {
             setShowLinkModal(false);

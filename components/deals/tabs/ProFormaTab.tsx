@@ -8,7 +8,7 @@ interface Props {
 }
 
 function fmt(n: number, type: 'dollar' | 'pct'): string {
-  if (!isFinite(n)) return '—';
+  if (!isFinite(n)) return 'N/A';
   if (type === 'dollar') {
     const abs = Math.abs(n);
     const sign = n < 0 ? '-' : '';
@@ -197,7 +197,7 @@ export default function ProFormaTab({ proForma }: Props) {
 
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>
-            Four Returns — Cumulative
+            Four Returns (Cumulative)
           </p>
           <PlotlyChart
             data={chart3Data}

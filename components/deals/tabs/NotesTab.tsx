@@ -76,7 +76,7 @@ export default function NotesTab({ dealId, initialNotes, onSaved }: Props) {
       <textarea
         value={text}
         onChange={handleChange}
-        placeholder="Add notes about this deal — due diligence findings, broker conversations, inspection notes, concerns, or anything else worth remembering…"
+        placeholder="Add notes about this deal. Due diligence findings, broker conversations, inspection notes, concerns, or anything else worth remembering."
         className="flex-1 w-full p-4 text-sm rounded-lg resize-none outline-none"
         style={{
           backgroundColor: 'var(--bg)',

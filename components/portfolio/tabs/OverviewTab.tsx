@@ -228,7 +228,7 @@ export default function OverviewTab({
             </svg>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold mb-1" style={{ color: 'var(--danger)' }}>
-                {highFlags.length} High-Severity Alert{highFlags.length !== 1 ? 's' : ''} — Review Required
+                {highFlags.length} High-Severity Alert{highFlags.length !== 1 ? 's' : ''}: Review Required
               </p>
               <ul className="space-y-0.5">
                 {highFlags.map((f, i) => (
@@ -245,7 +245,7 @@ export default function OverviewTab({
       {/* ── KPI Tiles (most recent period) ─────────────────────────────────── */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
-          Most Recent Period — {periods[periods.length - 1]}
+          Most Recent Period: {periods[periods.length - 1]}
         </p>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatTile

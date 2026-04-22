@@ -950,28 +950,34 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
           <>
             {profileJustUpdated && activeDeal.analysis && (
               <div
-                className="flex items-center justify-between px-4 py-2.5 gap-3 flex-shrink-0"
+                className="flex items-center justify-between px-4 py-3 gap-3 flex-shrink-0"
                 style={{
-                  backgroundColor: 'rgba(59,130,246,0.07)',
-                  borderBottom: '1px solid rgba(59,130,246,0.2)',
+                  backgroundColor: 'rgba(245,158,11,0.13)',
+                  borderBottom: '3px solid rgba(245,158,11,0.5)',
+                  borderLeft: '4px solid var(--warning)',
                 }}
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" style={{ flexShrink: 0 }}>
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" style={{ flexShrink: 0 }}>
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
                   </svg>
-                  <p className="text-xs" style={{ color: 'var(--text)' }}>
-                    Your investor profile was updated — re-analyze this deal to apply your new targets.
-                  </p>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: 'var(--warning)' }}>
+                      Investor profile updated
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--text)', opacity: 0.8 }}>
+                      This deal was analyzed with your old targets. Hit Re-Analyze to apply your new profile.
+                    </p>
+                  </div>
                 </div>
                 <button
                   onClick={() => setProfileJustUpdated(false)}
-                  className="flex-shrink-0 p-1 rounded hover:opacity-60 transition-opacity"
+                  className="flex-shrink-0 p-1.5 rounded hover:opacity-60 transition-opacity"
                   style={{ color: 'var(--muted)' }}
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
@@ -985,6 +991,7 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
               onDelete={handleDealDelete}
               onShowProfile={handleLoadProfile}
               onViewInPortfolio={handleViewInPortfolio}
+              onPropertyLinked={refreshProperties}
               history={history}
               properties={properties}
             />

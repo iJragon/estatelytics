@@ -213,7 +213,7 @@ function T12ImportModal({ history, onImport, onClose }: T12ModalProps) {
         </div>
 
         <p className="text-xs mb-3" style={{ color: 'var(--muted)' }}>
-          AI reads every row — works with any statement format, any layout.
+          AI reads every row. Works with any statement format, any layout.
         </p>
 
         {error && (
@@ -419,7 +419,7 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving,
 
         {step === 'financing' && (
           <>
-            <Field label="Down Payment" hint="Dollar amount — not percentage">
+            <Field label="Down Payment" hint="Dollar amount (not a percentage)">
               <NumberInput value={inputs.downPayment} onChange={v => set('downPayment', v)} prefix="$" />
             </Field>
             {inputs.purchasePrice > 0 && inputs.downPayment > 0 && (
@@ -554,7 +554,7 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving,
             )}
             {warnings.filter(w => w.level === 'warn').length > 0 && canSave && (
               <p className="text-xs" style={{ color: '#b45309' }}>
-                {warnings.filter(w => w.level === 'warn').length} warning{warnings.filter(w => w.level === 'warn').length > 1 ? 's' : ''} — review before proceeding
+                {warnings.filter(w => w.level === 'warn').length} warning{warnings.filter(w => w.level === 'warn').length > 1 ? 's' : ''}, review before proceeding
               </p>
             )}
             <button
