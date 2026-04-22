@@ -1,25 +1,31 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { Deal, DealInputs, DealAnalysis } from '@/lib/models/deal';
+import type { HistoryEntry } from '@/app/dashboard/page';
 import DealInputForm from './DealInputForm';
 import DealOverviewTab from './tabs/DealOverviewTab';
 import ProFormaTab from './tabs/ProFormaTab';
 import SensitivityTab from './tabs/SensitivityTab';
 import DealNarrativeTab from './tabs/DealNarrativeTab';
+import APODTab from './tabs/APODTab';
+import MonteCarloTab from './tabs/MonteCarloTab';
 
 interface Props {
   deal: Deal;
   onUpdate: (updated: Deal) => void;
   onDelete: (id: string) => void;
+  history?: HistoryEntry[];
 }
 
-type Tab = 'overview' | 'proforma' | 'sensitivity' | 'narrative';
+type Tab = 'overview' | 'apod' | 'proforma' | 'sensitivity' | 'montecarlo' | 'narrative';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'overview',    label: 'Overview' },
+  { key: 'apod',        label: 'APOD' },
   { key: 'proforma',    label: 'Pro Forma' },
   { key: 'sensitivity', label: 'Sensitivity' },
+  { key: 'montecarlo',  label: 'Monte Carlo' },
   { key: 'narrative',   label: 'AI Analysis' },
 ];
 
@@ -33,7 +39,7 @@ const VERDICT_COLORS: Record<string, string> = {
   'strong-pass': '#991b1b',
 };
 
-export default function DealView({ deal, onUpdate, onDelete }: Props) {
+export default function DealView({ deal, onUpdate, onDelete, history }: Props) {
   const [tab, setTab] = useState<Tab>('overview');
   const [editingInputs, setEditingInputs] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -42,6 +48,8 @@ export default function DealView({ deal, onUpdate, onDelete }: Props) {
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState('');
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const hasAnalysis = !!deal.analysis;
   const hasInputs = !!deal.inputs;
@@ -58,7 +66,6 @@ export default function DealView({ deal, onUpdate, onDelete }: Props) {
       if (!res.ok) throw new Error('Failed to save inputs');
       onUpdate({ ...deal, inputs });
       setEditingInputs(false);
-      // Auto-trigger analysis after saving inputs
       handleAnalyze({ ...deal, inputs });
     } catch {
       setError('Failed to save inputs. Please try again.');
@@ -100,7 +107,6 @@ export default function DealView({ deal, onUpdate, onDelete }: Props) {
           if (!line.startsWith('data: ')) continue;
 
           const raw = line.slice(6);
-          // Detect which event this data belongs to by peeking at the preceding buffer
           try {
             const parsed = JSON.parse(raw);
             if (parsed.metrics && parsed.proForma && parsed.score) {
@@ -118,6 +124,8 @@ export default function DealView({ deal, onUpdate, onDelete }: Props) {
           }
         }
       }
+
+      void updatedAnalysis;
     } catch {
       setError('Analysis failed. Please try again.');
     } finally {
@@ -136,6 +144,30 @@ export default function DealView({ deal, onUpdate, onDelete }: Props) {
       setConfirmDelete(false);
     }
   }, [deal.id, onDelete]);
+
+  async function handleExport(format: 'excel' | 'pdf') {
+    setShowExportMenu(false);
+    try {
+      const res = await fetch(`/api/deals/${deal.id}/export?format=${format}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Export failed' }));
+        setError(err.error ?? 'Export failed');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeName = deal.name.replace(/[^a-z0-9_\-. ]/gi, '_').slice(0, 60);
+      a.download = `${safeName}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('Export failed. Please try again.');
+    }
+  }
 
   const narrative = streamingNarrative || deal.aiNarrative || '';
   const verdict = deal.analysis?.score?.verdict;
@@ -162,6 +194,7 @@ export default function DealView({ deal, onUpdate, onDelete }: Props) {
             onSave={handleSaveInputs}
             onCancel={() => setEditingInputs(false)}
             saving={saving}
+            history={history}
           />
         </div>
       </div>
@@ -210,6 +243,46 @@ export default function DealView({ deal, onUpdate, onDelete }: Props) {
               >
                 {analyzing ? 'Analyzing...' : hasAnalysis ? 'Re-Analyze' : 'Analyze'}
               </button>
+            )}
+            {/* Export dropdown */}
+            {hasAnalysis && (
+              <div className="relative" ref={exportMenuRef}>
+                <button
+                  onClick={() => setShowExportMenu(prev => !prev)}
+                  className="px-3 py-1.5 text-xs rounded flex items-center gap-1"
+                  style={{ border: '1px solid var(--border)', color: 'var(--text)', backgroundColor: 'var(--surface)' }}
+                >
+                  Export
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                {showExportMenu && (
+                  <div
+                    className="absolute right-0 top-full mt-1 rounded-lg shadow-lg overflow-hidden z-20"
+                    style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', minWidth: 140 }}
+                  >
+                    <button
+                      onClick={() => handleExport('excel')}
+                      className="w-full text-left px-4 py-2.5 text-xs transition-colors hover:bg-opacity-50"
+                      style={{ color: 'var(--text)' }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg)')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      Export Excel (.xlsx)
+                    </button>
+                    <button
+                      onClick={() => handleExport('pdf')}
+                      className="w-full text-left px-4 py-2.5 text-xs transition-colors"
+                      style={{ color: 'var(--text)', borderTop: '1px solid var(--border)' }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg)')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      Export PDF
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
             {!confirmDelete ? (
               <button
@@ -276,12 +349,12 @@ export default function DealView({ deal, onUpdate, onDelete }: Props) {
       {/* Tabs (only when analysis exists) */}
       {hasInputs && hasAnalysis && (
         <>
-          <div className="flex border-b" style={{ borderColor: 'var(--border)' }}>
+          <div className="flex border-b overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
             {TABS.map(t => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className="flex-1 py-2.5 text-xs font-medium transition-colors"
+                className="flex-shrink-0 py-2.5 px-3 text-xs font-medium transition-colors"
                 style={{
                   color: t.key === tab ? 'var(--accent)' : 'var(--muted)',
                   borderBottom: t.key === tab ? '2px solid var(--accent)' : '2px solid transparent',
@@ -301,11 +374,32 @@ export default function DealView({ deal, onUpdate, onDelete }: Props) {
                 inputs={deal.inputs!}
               />
             )}
+            {tab === 'apod' && deal.analysis && (
+              <APODTab
+                metrics={deal.analysis.metrics}
+                inputs={deal.inputs!}
+                proForma={deal.analysis.proForma}
+              />
+            )}
             {tab === 'proforma' && deal.analysis && (
               <ProFormaTab proForma={deal.analysis.proForma} />
             )}
             {tab === 'sensitivity' && deal.analysis && (
               <SensitivityTab sensitivity={deal.analysis.sensitivity} />
+            )}
+            {tab === 'montecarlo' && deal.analysis?.monteCarlo && (
+              <MonteCarloTab result={deal.analysis.monteCarlo} />
+            )}
+            {tab === 'montecarlo' && deal.analysis && !deal.analysis.monteCarlo && (
+              <div className="flex flex-col items-center justify-center p-8 text-center" style={{ minHeight: 240 }}>
+                <p className="text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>Monte Carlo Not Available</p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                  Re-analyze this deal to generate Monte Carlo simulation results.
+                </p>
+                <button onClick={() => handleAnalyze()} disabled={analyzing} className="btn-primary px-4 py-2 text-sm mt-4">
+                  {analyzing ? 'Analyzing...' : 'Re-Analyze'}
+                </button>
+              </div>
             )}
             {tab === 'narrative' && (
               <DealNarrativeTab narrative={narrative} isStreaming={isStreaming} />

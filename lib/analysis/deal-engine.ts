@@ -1,4 +1,4 @@
-import type { DealInputs, DealMetrics, ProFormaYear, SensitivityCell, InvestorProfile } from '../models/deal';
+import type { DealInputs, DealMetrics, ProFormaYear, SensitivityCell, InvestorProfile, MonteCarloResult } from '../models/deal';
 
 // ── Mortgage Math ────────────────────────────────────────────────────────────
 
@@ -303,6 +303,98 @@ export function calculateMetrics(
     totalAmortization,
     totalTaxBenefit,
     overallReturn,
+  };
+}
+
+// ── Monte Carlo ───────────────────────────────────────────────────────────────
+
+// Box-Muller transform: produces a standard normal sample
+function boxMuller(): number {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
+
+function normal(mean: number, stdDev: number): number {
+  return mean + stdDev * boxMuller();
+}
+
+function clampVal(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = (p / 100) * (sorted.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+export function runMonteCarlo(
+  inputs: DealInputs,
+  profile: InvestorProfile,
+  iterations = 1000,
+): MonteCarloResult {
+  const irrArr: number[] = [];
+  const cocArr: number[] = [];
+  const dscrArr: number[] = [];
+  const viableArr: boolean[] = [];
+
+  for (let i = 0; i < iterations; i++) {
+    const modified: DealInputs = {
+      ...inputs,
+      vacancyRate:     clampVal(normal(inputs.vacancyRate, 0.03), 0, 0.40),
+      rentGrowthRate:  clampVal(normal(inputs.rentGrowthRate, 0.015), -0.05, 0.12),
+      expenseGrowthRate: clampVal(normal(inputs.expenseGrowthRate, 0.01), 0, 0.08),
+      exitCapRate:     clampVal(normal(inputs.exitCapRate, 0.005), 0.03, 0.15),
+    };
+
+    try {
+      const pf = buildProForma(modified);
+      const m = calculateMetrics(modified, pf, profile);
+      irrArr.push(m.irr);
+      cocArr.push(m.cashOnCash);
+      dscrArr.push(m.dscr);
+      viableArr.push(m.dscr >= 1.0 && m.cashFlowBeforeTax > 0);
+    } catch {
+      // Skip invalid combinations
+    }
+  }
+
+  const n = irrArr.length;
+  const sortedIRR = [...irrArr].sort((a, b) => a - b);
+  const sortedCoC = [...cocArr].sort((a, b) => a - b);
+
+  const viableCount = viableArr.filter(Boolean).length;
+
+  // Collect 200 evenly-spaced samples for plotting
+  const step = Math.max(1, Math.floor(n / 200));
+  const samples: Array<{ irr: number; coc: number; dscr: number }> = [];
+  for (let i = 0; i < n && samples.length < 200; i += step) {
+    samples.push({ irr: irrArr[i], coc: cocArr[i], dscr: dscrArr[i] });
+  }
+
+  return {
+    iterations: n,
+    irrPercentiles: {
+      p10: percentile(sortedIRR, 10),
+      p25: percentile(sortedIRR, 25),
+      p50: percentile(sortedIRR, 50),
+      p75: percentile(sortedIRR, 75),
+      p90: percentile(sortedIRR, 90),
+    },
+    cocPercentiles: {
+      p10: percentile(sortedCoC, 10),
+      p25: percentile(sortedCoC, 25),
+      p50: percentile(sortedCoC, 50),
+      p75: percentile(sortedCoC, 75),
+      p90: percentile(sortedCoC, 90),
+    },
+    viablePct: n > 0 ? viableCount / n : 0,
+    samples,
   };
 }
 

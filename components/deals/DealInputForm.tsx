@@ -1,14 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { DealInputs, OperatingExpenseBreakdown } from '@/lib/models/deal';
+import type { DealInputs, OperatingExpenseBreakdown, ValidationWarning } from '@/lib/models/deal';
 import { DEFAULT_DEAL_INPUTS } from '@/lib/models/deal';
+import { validateDealInputs } from '@/lib/analysis/deal-validation';
+import type { HistoryEntry } from '@/app/dashboard/page';
 
 interface Props {
   initialInputs?: DealInputs;
   onSave: (inputs: DealInputs) => void;
   onCancel: () => void;
   saving?: boolean;
+  history?: HistoryEntry[];
 }
 
 type Step = 'property' | 'financing' | 'income' | 'expenses' | 'assumptions';
@@ -20,6 +23,8 @@ const STEPS: { key: Step; label: string }[] = [
   { key: 'expenses',    label: 'Expenses' },
   { key: 'assumptions', label: 'Assumptions' },
 ];
+
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 function Field({
   label,
@@ -52,14 +57,12 @@ function NumberInput({
 }) {
   const [raw, setRaw] = useState(value === 0 ? '' : String(value));
 
-  // Sync when parent resets the form
   useEffect(() => {
     setRaw(value === 0 ? '' : String(value));
   }, [value]);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const text = e.target.value;
-    // Allow empty, digits, one decimal point, and leading minus
     if (!/^-?\d*\.?\d*$/.test(text)) return;
     setRaw(text);
     const parsed = parseFloat(text);
@@ -112,9 +115,171 @@ function PctInput({ value, onChange }: { value: number; onChange: (v: number) =>
   );
 }
 
-export default function DealInputForm({ initialInputs, onSave, onCancel, saving }: Props) {
+function WarningBanner({ warnings }: { warnings: ValidationWarning[] }) {
+  if (warnings.length === 0) return null;
+  const errors = warnings.filter(w => w.level === 'error');
+  const warns  = warnings.filter(w => w.level === 'warn');
+
+  return (
+    <div className="space-y-1 mb-2">
+      {errors.map((w, i) => (
+        <div
+          key={i}
+          className="flex items-start gap-2 px-3 py-2 rounded text-xs"
+          style={{ backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#dc2626' }}
+        >
+          <svg className="shrink-0 mt-0.5" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          {w.message}
+        </div>
+      ))}
+      {warns.map((w, i) => (
+        <div
+          key={i}
+          className="flex items-start gap-2 px-3 py-2 rounded text-xs"
+          style={{ backgroundColor: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.25)', color: '#b45309' }}
+        >
+          <svg className="shrink-0 mt-0.5" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          {w.message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── T12 Import Modal ──────────────────────────────────────────────────────────
+
+interface T12ModalProps {
+  history: HistoryEntry[];
+  onImport: (inputs: Partial<DealInputs>) => void;
+  onClose: () => void;
+}
+
+function T12ImportModal({ history, onImport, onClose }: T12ModalProps) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSelect(entry: HistoryEntry) {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/history/${entry.id}`);
+      if (!res.ok) throw new Error('Failed to load analysis');
+      const result = await res.json();
+      const kf = result?.statement?.keyFigures ?? {};
+
+      const prefill: Partial<DealInputs> = {
+        grossScheduledIncome: kf['gross_potential_rent']?.annualTotal ?? 0,
+        expenses: {
+          propertyTaxes:  kf['real_estate_taxes']?.annualTotal ?? 0,
+          insurance:      kf['insurance']?.annualTotal ?? 0,
+          utilities:      kf['utilities']?.annualTotal ?? 0,
+          payroll:        kf['total_payroll']?.annualTotal ?? 0,
+          managementFee:  kf['management_fees']?.annualTotal ?? 0,
+          maintenance: 0,
+          landscaping: 0,
+          janitorial: 0,
+          marketing: 0,
+          administrative: 0,
+          reserves: 0,
+          miscellaneous: 0,
+        },
+      };
+
+      onImport(prefill);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="rounded-xl p-5 max-w-md w-full mx-4 shadow-xl"
+        style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', maxHeight: '70vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
+            Import from T12 Analysis
+          </h3>
+          <button onClick={onClose} className="p-1 rounded" style={{ color: 'var(--muted)' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <p className="text-xs mb-3" style={{ color: 'var(--muted)' }}>
+          Select an analyzed T12 statement to prefill income and expense fields.
+        </p>
+
+        {error && (
+          <p className="text-xs mb-2 px-3 py-2 rounded" style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#dc2626' }}>
+            {error}
+          </p>
+        )}
+
+        {history.length === 0 ? (
+          <p className="text-sm text-center py-6" style={{ color: 'var(--muted)' }}>
+            No analyzed statements found. Upload a T12 to the main dashboard first.
+          </p>
+        ) : (
+          <div className="overflow-y-auto flex-1 -mx-1">
+            {history.map(entry => (
+              <button
+                key={entry.id}
+                onClick={() => handleSelect(entry)}
+                disabled={loading}
+                className="w-full text-left px-3 py-2.5 rounded-lg mb-1 transition-colors"
+                style={{
+                  backgroundColor: 'var(--bg)',
+                  border: '1px solid var(--border)',
+                  opacity: loading ? 0.6 : 1,
+                }}
+              >
+                <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>
+                  {entry.propertyName}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+                  {entry.period} · {entry.fileName}
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {loading && (
+          <div className="flex items-center justify-center gap-2 py-3 text-xs" style={{ color: 'var(--accent)' }}>
+            <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 11-6.219-8.56" />
+            </svg>
+            Loading analysis…
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
+export default function DealInputForm({ initialInputs, onSave, onCancel, saving, history }: Props) {
   const [step, setStep] = useState<Step>('property');
   const [inputs, setInputs] = useState<DealInputs>(initialInputs ?? DEFAULT_DEAL_INPUTS);
+  const [showT12Modal, setShowT12Modal] = useState(false);
+
+  const warnings = validateDealInputs(inputs);
+  const stepWarnings = warnings.filter(w => w.step === step);
+  const hasHistory = (history?.length ?? 0) > 0;
 
   function set<K extends keyof DealInputs>(key: K, value: DealInputs[K]) {
     setInputs(prev => ({ ...prev, [key]: value }));
@@ -122,6 +287,21 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
 
   function setExpense(key: keyof OperatingExpenseBreakdown, value: number) {
     setInputs(prev => ({ ...prev, expenses: { ...prev.expenses, [key]: value } }));
+  }
+
+  function applyT12Import(prefill: Partial<DealInputs>) {
+    setInputs(prev => ({
+      ...prev,
+      ...(prefill.grossScheduledIncome !== undefined && { grossScheduledIncome: prefill.grossScheduledIncome }),
+      expenses: prefill.expenses
+        ? { ...prev.expenses, ...prefill.expenses }
+        : prev.expenses,
+    }));
+    setShowT12Modal(false);
+    // Navigate to income step to show imported values
+    if (prefill.grossScheduledIncome !== undefined) {
+      setStep('income');
+    }
   }
 
   const stepIndex = STEPS.findIndex(s => s.key === step);
@@ -143,37 +323,47 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
     { key: 'miscellaneous', label: 'Miscellaneous' },
   ];
 
+  const allErrors = warnings.filter(w => w.level === 'error');
+  const canSave = allErrors.length === 0;
+
   return (
     <div className="flex flex-col h-full">
       {/* Step tabs */}
       <div className="flex border-b" style={{ borderColor: 'var(--border)' }}>
-        {STEPS.map((s, i) => (
-          <button
-            key={s.key}
-            onClick={() => setStep(s.key)}
-            className="flex-1 py-2 text-xs font-medium transition-colors"
-            style={{
-              color: s.key === step ? 'var(--accent)' : 'var(--muted)',
-              borderBottom: s.key === step ? '2px solid var(--accent)' : '2px solid transparent',
-              backgroundColor: 'transparent',
-            }}
-          >
-            <span
-              className="inline-flex items-center justify-center w-4 h-4 rounded-full text-xs mr-1"
+        {STEPS.map((s, i) => {
+          const hasWarning = warnings.some(w => w.step === s.key && w.level === 'warn');
+          const hasError   = warnings.some(w => w.step === s.key && w.level === 'error');
+          return (
+            <button
+              key={s.key}
+              onClick={() => setStep(s.key)}
+              className="flex-1 py-2 text-xs font-medium transition-colors"
               style={{
-                backgroundColor: s.key === step ? 'var(--accent)' : 'var(--border)',
-                color: s.key === step ? '#fff' : 'var(--muted)',
+                color: s.key === step ? 'var(--accent)' : 'var(--muted)',
+                borderBottom: s.key === step ? '2px solid var(--accent)' : '2px solid transparent',
+                backgroundColor: 'transparent',
               }}
             >
-              {i + 1}
-            </span>
-            {s.label}
-          </button>
-        ))}
+              <span
+                className="inline-flex items-center justify-center w-4 h-4 rounded-full text-xs mr-1"
+                style={{
+                  backgroundColor: hasError ? '#dc2626' : hasWarning ? '#b45309' : s.key === step ? 'var(--accent)' : 'var(--border)',
+                  color: (hasError || hasWarning || s.key === step) ? '#fff' : 'var(--muted)',
+                }}
+              >
+                {i + 1}
+              </span>
+              {s.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Step content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+        {/* Per-step warnings */}
+        <WarningBanner warnings={stepWarnings} />
 
         {step === 'property' && (
           <>
@@ -233,7 +423,7 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
             <Field label="Down Payment" hint="Dollar amount — not percentage">
               <NumberInput value={inputs.downPayment} onChange={v => set('downPayment', v)} prefix="$" />
             </Field>
-            {inputs.purchasePrice > 0 && (
+            {inputs.purchasePrice > 0 && inputs.downPayment > 0 && (
               <p className="text-xs" style={{ color: 'var(--muted)' }}>
                 Loan: ${((inputs.purchasePrice - inputs.downPayment) / 1000).toFixed(1)}K
                 ({((1 - inputs.downPayment / inputs.purchasePrice) * 100).toFixed(1)}% LTV)
@@ -253,6 +443,22 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
 
         {step === 'income' && (
           <>
+            {hasHistory && (
+              <button
+                onClick={() => setShowT12Modal(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors"
+                style={{
+                  border: '1px dashed var(--accent)',
+                  color: 'var(--accent)',
+                  backgroundColor: 'rgba(37,99,235,0.04)',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                Import from T12 Analysis
+              </button>
+            )}
             <Field label="Gross Scheduled Income" hint="Annual potential rental income at 100% occupancy">
               <NumberInput value={inputs.grossScheduledIncome} onChange={v => set('grossScheduledIncome', v)} prefix="$" />
             </Field>
@@ -264,6 +470,22 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
 
         {step === 'expenses' && (
           <>
+            {hasHistory && (
+              <button
+                onClick={() => setShowT12Modal(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors"
+                style={{
+                  border: '1px dashed var(--accent)',
+                  color: 'var(--accent)',
+                  backgroundColor: 'rgba(37,99,235,0.04)',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                Import from T12 Analysis
+              </button>
+            )}
             <p className="text-xs" style={{ color: 'var(--muted)' }}>
               Enter annual operating expenses. Leave at $0 for categories that don&apos;t apply.
             </p>
@@ -273,7 +495,6 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
                   value={inputs.expenses[key]}
                   onChange={v => setExpense(key, v)}
                   prefix="$"
-                 
                 />
               </Field>
             ))}
@@ -326,13 +547,26 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
         </button>
 
         {isLast ? (
-          <button
-            onClick={() => onSave(inputs)}
-            disabled={saving}
-            className="btn-primary px-5 py-2 text-sm"
-          >
-            {saving ? 'Saving...' : 'Save & Analyze'}
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            {!canSave && (
+              <p className="text-xs" style={{ color: '#dc2626' }}>
+                {allErrors.length} error{allErrors.length > 1 ? 's' : ''} must be fixed before saving
+              </p>
+            )}
+            {warnings.filter(w => w.level === 'warn').length > 0 && canSave && (
+              <p className="text-xs" style={{ color: '#b45309' }}>
+                {warnings.filter(w => w.level === 'warn').length} warning{warnings.filter(w => w.level === 'warn').length > 1 ? 's' : ''} — review before proceeding
+              </p>
+            )}
+            <button
+              onClick={() => onSave(inputs)}
+              disabled={saving || !canSave}
+              className="btn-primary px-5 py-2 text-sm"
+              style={!canSave ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+            >
+              {saving ? 'Saving...' : 'Save & Analyze'}
+            </button>
+          </div>
         ) : (
           <button
             onClick={() => setStep(STEPS[stepIndex + 1].key)}
@@ -342,6 +576,15 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving 
           </button>
         )}
       </div>
+
+      {/* T12 Import Modal */}
+      {showT12Modal && (
+        <T12ImportModal
+          history={history ?? []}
+          onImport={applyT12Import}
+          onClose={() => setShowT12Modal(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,3 +1,12 @@
+// ── Validation ──────────────────────────────────────────────────────────────
+
+export interface ValidationWarning {
+  field: string;          // Which DealInputs key(s) this applies to
+  level: 'error' | 'warn';
+  message: string;
+  step: 'property' | 'financing' | 'income' | 'expenses' | 'assumptions';
+}
+
 // ── Inputs ─────────────────────────────────────────────────────────────────
 
 export interface OperatingExpenseBreakdown {
@@ -166,11 +175,20 @@ export interface ScoreBreakdown {
   verdict: 'strong-buy' | 'buy' | 'conditional' | 'avoid' | 'strong-avoid';
 }
 
+export interface MonteCarloResult {
+  iterations: number;
+  irrPercentiles: { p10: number; p25: number; p50: number; p75: number; p90: number };
+  cocPercentiles: { p10: number; p25: number; p50: number; p75: number; p90: number };
+  viablePct: number;
+  samples: Array<{ irr: number; coc: number; dscr: number }>;  // 200 samples for plotting
+}
+
 export interface DealAnalysis {
   metrics: DealMetrics;
   proForma: ProFormaYear[];
   sensitivity: SensitivityCell[][];  // [vacancy index][rentGrowth index]
   score: ScoreBreakdown;
+  monteCarlo?: MonteCarloResult;
 }
 
 // ── Deal Record ─────────────────────────────────────────────────────────────

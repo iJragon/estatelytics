@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { buildProForma, calculateMetrics, buildSensitivityMatrix } from '@/lib/analysis/deal-engine';
+import { buildProForma, calculateMetrics, buildSensitivityMatrix, runMonteCarlo } from '@/lib/analysis/deal-engine';
 import { scoreDeal } from '@/lib/analysis/deal-score';
 import { streamDealNarrative } from '@/lib/agents/deal-agent';
 import { DEFAULT_INVESTOR_PROFILE } from '@/lib/models/deal';
@@ -53,8 +53,9 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
   const metrics = calculateMetrics(inputs, proForma, profile);
   const sensitivity = buildSensitivityMatrix(inputs, profile);
   const score = scoreDeal(metrics, profile);
+  const monteCarlo = runMonteCarlo(inputs, profile, 1000);
 
-  const analysis = { metrics, proForma, sensitivity, score };
+  const analysis = { metrics, proForma, sensitivity, score, monteCarlo };
 
   // Persist computed analysis immediately (before streaming narrative)
   await supabase

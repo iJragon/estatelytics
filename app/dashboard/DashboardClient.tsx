@@ -862,6 +862,7 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
             deal={activeDeal}
             onUpdate={handleDealUpdate}
             onDelete={handleDealDelete}
+            history={history}
           />
         ) : activeView === 'property' && (propertyLoading || propertyDetail) ? (
           // ── Property portfolio view ────────────────────────────────────────
