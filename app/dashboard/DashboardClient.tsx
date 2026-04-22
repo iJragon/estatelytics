@@ -821,7 +821,8 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
     ));
   }
 
-  function handleDealDelete(id: string) {
+  async function handleDealDelete(id: string) {
+    await fetch(`/api/deals/${id}`, { method: 'DELETE' });
     setDeals(prev => prev.filter(d => d.id !== id));
     if (activeDealId === id) {
       setActiveDeal(null);
