@@ -188,11 +188,88 @@ Rules:
   }
   if (hasExpense) inputs.expenses = { ...DEFAULT_DEAL_INPUTS.expenses, ...expenses };
 
+  // ── AI estimation pass ────────────────────────────────────────────────────
+  // Ask the model to suggest reasonable defaults for fields that were NOT
+  // found in the document, using what was extracted as context.
+  const suggested: Partial<DealInputs> = {};
+  try {
+    const ctxLines: string[] = [];
+    if (inputs.purchasePrice)        ctxLines.push(`Purchase price: $${inputs.purchasePrice.toLocaleString()}`);
+    if (inputs.propertyType)         ctxLines.push(`Property type: ${inputs.propertyType}`);
+    if (inputs.grossScheduledIncome) ctxLines.push(`Gross scheduled income: $${inputs.grossScheduledIncome.toLocaleString()}/yr`);
+    if (inputs.otherIncome)          ctxLines.push(`Other income: $${inputs.otherIncome.toLocaleString()}/yr`);
+
+    // Only request estimation for fields not already extracted
+    const alreadyHave = new Set([
+      ...Object.keys(inputs).filter(k => k !== 'expenses'),
+      ...Object.keys(inputs.expenses ?? {}),
+    ]);
+
+    const estimationPrompt = `You are a real estate investment analyst. A document import extracted the following deal data:
+
+${ctxLines.length ? ctxLines.join('\n') : '(limited data extracted)'}
+
+Suggest intelligent default values for MISSING fields using standard US real estate rules of thumb. Return ONLY valid JSON — no explanation, no markdown.
+
+Do NOT estimate: interestRate, downPayment, amortizationYears, loanTermYears (lender-determined).
+Do NOT include fields already extracted above.
+
+{
+  ${!alreadyHave.has('capexBudget') ? '"capexBudget": <~1% of purchase price annually, or null>,' : ''}
+  ${!alreadyHave.has('vacancyRate') ? '"vacancyRate": <0.05 residential / 0.08 commercial, or null>,' : ''}
+  ${!alreadyHave.has('exitCapRate') ? '"exitCapRate": <0.055 residential / 0.07 commercial, or null>,' : ''}
+  "expenses": {
+    ${!alreadyHave.has('propertyTaxes') ? '"propertyTaxes": <~1.2% of purchase price annually, or null>,' : ''}
+    ${!alreadyHave.has('insurance') ? '"insurance": <~0.5% of purchase price annually, or null>,' : ''}
+    ${!alreadyHave.has('maintenance') ? '"maintenance": <~5% of gross income annually, or null>,' : ''}
+    ${!alreadyHave.has('managementFee') ? '"managementFee": <~10% gross income residential / 5% commercial, or null>,' : ''}
+    ${!alreadyHave.has('reserves') ? '"reserves": <~5% of gross income annually, or null>' : '"_skip": null'}
+  }
+}
+
+Use null for any value you cannot reasonably estimate (e.g. purchase price unknown).
+Return ONLY the JSON object.`;
+
+    const estCompletion = await groq.chat.completions.create({
+      model: DEFAULT_MODEL,
+      messages: [{ role: 'user', content: estimationPrompt }],
+      temperature: 0.1,
+      max_tokens: 400,
+    });
+
+    const estRaw = estCompletion.choices[0]?.message?.content?.trim() ?? '';
+    const estJson = estRaw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+    const est = JSON.parse(estJson) as {
+      capexBudget?: number | null;
+      vacancyRate?: number | null;
+      exitCapRate?: number | null;
+      expenses?: Record<string, number | null>;
+    };
+
+    if (est.capexBudget != null && !inputs.capexBudget) suggested.capexBudget = est.capexBudget;
+    if (est.vacancyRate != null && !inputs.vacancyRate) suggested.vacancyRate = est.vacancyRate;
+    if (est.exitCapRate != null && !inputs.exitCapRate) suggested.exitCapRate = est.exitCapRate;
+
+    const estExpenseKeys = ['propertyTaxes', 'insurance', 'maintenance', 'managementFee', 'reserves'] as const;
+    const suggestedExpenses: Partial<typeof DEFAULT_DEAL_INPUTS.expenses> = {};
+    let hasSuggestedExpense = false;
+    for (const k of estExpenseKeys) {
+      const val = est.expenses?.[k];
+      if (val != null && !(inputs.expenses as unknown as Record<string, unknown>)?.[k]) {
+        suggestedExpenses[k] = val;
+        hasSuggestedExpense = true;
+      }
+    }
+    if (hasSuggestedExpense) suggested.expenses = { ...DEFAULT_DEAL_INPUTS.expenses, ...suggestedExpenses };
+  } catch {
+    // Estimation is best-effort — failure is non-fatal
+  }
+
   const fieldCount = Object.keys(inputs).length;
   const aiNote = extracted.notes ?? '';
   const importNotes = fieldCount === 0
     ? 'No deal inputs could be extracted. Please fill in the form manually.'
-    : `${fieldCount} field${fieldCount > 1 ? 's' : ''} populated. Any missing fields use current market-rate defaults.${aiNote ? ' ' + aiNote : ''}`;
+    : `${fieldCount} field${fieldCount > 1 ? 's' : ''} imported from document. Fields marked "estimated" use AI-suggested defaults — verify before analyzing.${aiNote ? ' ' + aiNote : ''}`;
 
-  return NextResponse.json({ inputs, importNotes });
+  return NextResponse.json({ inputs, suggested, importNotes });
 }
