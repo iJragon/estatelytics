@@ -57,15 +57,18 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
 
   const analysis = { metrics, proForma, sensitivity, score, monteCarlo };
 
-  // Persist computed analysis + the profile snapshot used for scoring
+  // Persist core analysis first (always safe — no schema dependency on new columns)
   await supabase
     .from('deals')
-    .update({
-      analysis,
-      status: 'analyzed',
-      profile_snapshot: profile,
-      updated_at: new Date().toISOString(),
-    })
+    .update({ analysis, status: 'analyzed', updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  // Persist profile snapshot separately so a missing column (pre-migration) can't
+  // block the analysis save above.
+  await supabase
+    .from('deals')
+    .update({ profile_snapshot: profile })
     .eq('id', id)
     .eq('user_id', user.id);
 

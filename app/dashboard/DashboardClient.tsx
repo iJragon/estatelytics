@@ -812,7 +812,12 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
   }
 
   function handleDealUpdate(updated: Deal) {
-    setActiveDeal(updated);
+    // When a fresh analysis arrives, stamp the current profile as the snapshot
+    // so the banner clears immediately without waiting for a server round-trip.
+    const withSnapshot: Deal = updated.analysis && investorProfile
+      ? { ...updated, profileSnapshot: investorProfile }
+      : updated;
+    setActiveDeal(withSnapshot);
     setDeals(prev => prev.map(d => d.id === updated.id
       ? { ...d, status: updated.status, dealScore: updated.analysis?.score?.total ?? d.dealScore }
       : d,
@@ -959,9 +964,33 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
         ) : activeView === 'deal' && activeDeal ? (
           <>
             {(() => {
+              if (!activeDeal.analysis) return null;
               const snap = activeDeal.profileSnapshot;
               const cur  = investorProfile;
-              if (!activeDeal.analysis || !snap || !cur) return null;
+
+              // No snapshot = deal was analyzed before this feature was added.
+              // Show a neutral nudge so the user knows to re-analyze.
+              if (!snap && cur) {
+                return (
+                  <div
+                    className="px-4 py-2.5 flex-shrink-0 flex items-center gap-2.5"
+                    style={{
+                      backgroundColor: 'rgba(37,99,235,0.07)',
+                      borderBottom: '1px solid rgba(37,99,235,0.2)',
+                      borderLeft: '4px solid var(--accent)',
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" style={{ flexShrink: 0 }}>
+                      <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                      This analysis has no profile record. Re-Analyze to link it to your current investor profile.
+                    </p>
+                  </div>
+                );
+              }
+
+              if (!snap || !cur) return null;
 
               // Compute which fields changed since this deal was last analyzed
               const diffs: { label: string; old: string; now: string }[] = [];
