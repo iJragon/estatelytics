@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { Deal, DealMetrics, ProFormaYear } from '../models/deal';
+import type { Deal, DealMetrics, ProFormaYear, InvestorProfile } from '../models/deal';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -20,6 +20,17 @@ function times(n: number): string {
 }
 
 // ── Excel Export ─────────────────────────────────────────────────────────────
+
+function buildProfileSheet(profile: InvestorProfile): (string | number)[][] {
+  return [
+    ['Investor Profile', ''],
+    ['Target Cash-on-Cash', pct(profile.targetCashOnCash)],
+    ['Target IRR', pct(profile.targetIRR)],
+    ['Tax Bracket', pct(profile.taxBracket)],
+    ['Risk Tolerance', profile.riskTolerance],
+    ['Preferred Hold Period', `${profile.holdPeriod} years`],
+  ];
+}
 
 function buildSummarySheet(m: DealMetrics): (string | number)[][] {
   return [
@@ -232,6 +243,11 @@ export function exportDealToExcel(deal: Deal): Buffer {
 
   const sensitivityWs = XLSX.utils.aoa_to_sheet(buildSensitivitySheet(deal));
   XLSX.utils.book_append_sheet(wb, sensitivityWs, 'Sensitivity');
+
+  if (deal.profileSnapshot) {
+    const profileWs = XLSX.utils.aoa_to_sheet(buildProfileSheet(deal.profileSnapshot));
+    XLSX.utils.book_append_sheet(wb, profileWs, 'Investor Profile');
+  }
 
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   return buf as Buffer;
@@ -487,6 +503,27 @@ export async function exportDealToPDF(deal: Deal): Promise<Buffer> {
         layout: 'noBorders',
       },
       { text: `Overall Return: ${pct(m.overallReturn)}`, fontSize: 9, color: MUTED, margin: [0, 8, 0, 0] },
+
+      // Investor Profile section (if snapshot exists)
+      ...(deal.profileSnapshot ? [
+        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: LINE }], margin: [0, 12, 0, 8] },
+        { text: 'Analyzed With Investor Profile', fontSize: 10, bold: true, margin: [0, 0, 0, 6] },
+        {
+          table: {
+            widths: ['*', '*', '*', '*', '*'],
+            body: [[
+              { text: [`${pct(deal.profileSnapshot.targetCashOnCash)}\n`, { text: 'CoC Target', fontSize: 8, color: MUTED }], alignment: 'center', border: [false, false, false, false], margin: [2, 4, 2, 4] },
+              { text: [`${pct(deal.profileSnapshot.targetIRR)}\n`, { text: 'IRR Target', fontSize: 8, color: MUTED }], alignment: 'center', border: [false, false, false, false], margin: [2, 4, 2, 4] },
+              { text: [`${pct(deal.profileSnapshot.taxBracket)}\n`, { text: 'Tax Bracket', fontSize: 8, color: MUTED }], alignment: 'center', border: [false, false, false, false], margin: [2, 4, 2, 4] },
+              { text: [`${deal.profileSnapshot.holdPeriod} yr\n`, { text: 'Hold Period', fontSize: 8, color: MUTED }], alignment: 'center', border: [false, false, false, false], margin: [2, 4, 2, 4] },
+              { text: [`${deal.profileSnapshot.riskTolerance}\n`, { text: 'Risk Tolerance', fontSize: 8, color: MUTED }], alignment: 'center', border: [false, false, false, false], margin: [2, 4, 2, 4] },
+            ]],
+          },
+          layout: 'noBorders',
+          fillColor: '#f8fafc',
+          margin: [0, 0, 0, 8],
+        },
+      ] as object[] : []),
 
       // Footer
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: LINE }], margin: [0, 16, 0, 8] },

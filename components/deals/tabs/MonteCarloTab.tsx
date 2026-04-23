@@ -26,6 +26,17 @@ function PercentileCell({ value, formatter }: { value: number; formatter: (n: nu
 export default function MonteCarloTab({ result }: Props) {
   const { irrPercentiles, cocPercentiles, viablePct, samples, iterations } = result;
 
+  if (iterations === 0 || samples.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center" style={{ minHeight: 240 }}>
+        <p className="text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>No Simulation Data</p>
+        <p className="text-xs" style={{ color: 'var(--muted)' }}>
+          All Monte Carlo iterations failed — the deal inputs may produce degenerate cash flows. Re-analyze or adjust your inputs.
+        </p>
+      </div>
+    );
+  }
+
   const viableColor = viablePct >= 0.80
     ? 'var(--success)'
     : viablePct >= 0.60

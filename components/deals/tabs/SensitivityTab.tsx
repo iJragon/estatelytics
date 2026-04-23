@@ -1,9 +1,10 @@
 'use client';
 
-import type { SensitivityCell } from '@/lib/models/deal';
+import type { SensitivityCell, InvestorProfile } from '@/lib/models/deal';
 
 interface Props {
   sensitivity: SensitivityCell[][];
+  investorProfile?: InvestorProfile | null;
 }
 
 const RENT_LABELS = ['-2%', '0%', '+2%', '+3%', '+5%', '+7%'];
@@ -17,18 +18,18 @@ const GOOD: CellStyle  = { bg: 'rgba(34,197,94,0.18)',  color: 'var(--success)' 
 const WARN: CellStyle  = { bg: 'rgba(234,179,8,0.18)',  color: 'var(--warning)' };
 const BAD: CellStyle   = { bg: 'rgba(239,68,68,0.18)',  color: 'var(--danger)'  };
 
-function cocStyle(cell: SensitivityCell): CellStyle {
-  if (!cell.isViable)        return BAD;
-  if (cell.cashOnCash >= 0.08) return GOOD;
-  if (cell.cashOnCash >= 0.05) return WARN;
+function cocStyle(cell: SensitivityCell, cocTarget: number): CellStyle {
+  if (!cell.isViable)                    return BAD;
+  if (cell.cashOnCash >= cocTarget)      return GOOD;
+  if (cell.cashOnCash >= cocTarget * 0.7) return WARN;
   return WARN;
 }
 
-function irrStyle(cell: SensitivityCell): CellStyle {
+function irrStyle(cell: SensitivityCell, irrTarget: number): CellStyle {
   const pct = cell.irr * 100;
-  if (!cell.isViable) return BAD;
-  if (pct >= 12)      return GOOD;
-  if (pct >= 8)       return WARN;
+  if (!cell.isViable)          return BAD;
+  if (pct >= irrTarget * 100)  return GOOD;
+  if (pct >= irrTarget * 70)   return WARN;
   return WARN;
 }
 
@@ -50,6 +51,7 @@ function HeatTable({
   sensitivity: SensitivityCell[][];
   getStyle: (cell: SensitivityCell) => CellStyle;
   getValue: (cell: SensitivityCell) => string;
+  investorProfile?: InvestorProfile | null;
 }) {
   return (
     <div className="card">
@@ -126,21 +128,24 @@ function HeatTable({
   );
 }
 
-export default function SensitivityTab({ sensitivity }: Props) {
+export default function SensitivityTab({ sensitivity, investorProfile }: Props) {
+  const cocTarget = investorProfile?.targetCashOnCash ?? 0.08;
+  const irrTarget = investorProfile?.targetIRR ?? 0.12;
+
   return (
     <div className="p-4 space-y-6 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 220px)' }}>
       <HeatTable
         title="Cash-on-Cash Return"
-        description="Rows = vacancy rate, Columns = annual rent growth. Green >= 8%, Yellow 5-8%, Red = DSCR < 1.0 or negative cash flow."
+        description={`Rows = vacancy rate, Columns = annual rent growth. Green ≥ ${(cocTarget * 100).toFixed(0)}% (your target), Yellow = marginal, Red = DSCR < 1.0 or negative cash flow.`}
         sensitivity={sensitivity}
-        getStyle={cocStyle}
+        getStyle={cell => cocStyle(cell, cocTarget)}
         getValue={cell => `${(cell.cashOnCash * 100).toFixed(1)}%`}
       />
       <HeatTable
         title="IRR"
-        description="Internal Rate of Return across all scenarios. Green >= 12%, Yellow 8-12%, Red = non-viable."
+        description={`Internal Rate of Return across all scenarios. Green ≥ ${(irrTarget * 100).toFixed(0)}% (your target), Yellow = marginal, Red = non-viable.`}
         sensitivity={sensitivity}
-        getStyle={irrStyle}
+        getStyle={cell => irrStyle(cell, irrTarget)}
         getValue={cell => `${(cell.irr * 100).toFixed(1)}%`}
       />
       <HeatTable

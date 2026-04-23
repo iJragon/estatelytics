@@ -423,17 +423,21 @@ export function buildSensitivityMatrix(
 ): SensitivityCell[][] {
   return VACANCY_STEPS.map(vacancyRate => {
     return RENT_GROWTH_STEPS.map(rentGrowthRate => {
-      const modified = { ...inputs, vacancyRate, rentGrowthRate };
-      const pf = buildProForma(modified);
-      const m = calculateMetrics(modified, pf, profile);
-      return {
-        vacancyRate,
-        rentGrowthRate,
-        cashOnCash: m.cashOnCash,
-        irr: m.irr,
-        dscr: m.dscr,
-        isViable: m.dscr >= 1.0 && m.cashFlowBeforeTax > 0,
-      };
+      try {
+        const modified = { ...inputs, vacancyRate, rentGrowthRate };
+        const pf = buildProForma(modified);
+        const m = calculateMetrics(modified, pf, profile);
+        return {
+          vacancyRate,
+          rentGrowthRate,
+          cashOnCash: m.cashOnCash,
+          irr: m.irr,
+          dscr: m.dscr,
+          isViable: m.dscr >= 1.0 && m.cashFlowBeforeTax > 0,
+        };
+      } catch {
+        return { vacancyRate, rentGrowthRate, cashOnCash: 0, irr: 0, dscr: 0, isViable: false };
+      }
     });
   });
 }

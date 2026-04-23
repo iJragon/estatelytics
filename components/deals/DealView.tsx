@@ -61,6 +61,7 @@ export default function DealView({
   onPropertyLinked,
   history,
   properties = [],
+  investorProfile,
 }: Props) {
   const [tab, setTab] = useState<Tab>('overview');
   const [editingInputs, setEditingInputs] = useState(false);
@@ -395,7 +396,90 @@ export default function DealView({
             Running financial analysis…
           </div>
         )}
+        {analyzing && isStreaming && (
+          <div className="mt-2 flex items-center gap-2 text-xs" style={{ color: 'var(--accent)' }}>
+            <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 11-6.219-8.56" />
+            </svg>
+            Generating AI narrative…
+          </div>
+        )}
       </div>
+
+      {/* ── Profile staleness banner ────────────────────────────────────────── */}
+      {!editingInputs && deal.analysis && (() => {
+        const snap = deal.profileSnapshot;
+        const cur  = investorProfile;
+
+        if (!snap && cur) {
+          return (
+            <div
+              className="px-4 py-2.5 flex-shrink-0 flex items-center justify-between gap-3"
+              style={{ backgroundColor: 'rgba(37,99,235,0.07)', borderBottom: '1px solid rgba(37,99,235,0.2)', borderLeft: '4px solid var(--accent)' }}
+            >
+              <div className="flex items-center gap-2">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" style={{ flexShrink: 0 }}>
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                  This analysis has no profile record. Re-Analyze to link it to your current investor profile.
+                </p>
+              </div>
+              <button
+                onClick={() => handleAnalyze()}
+                disabled={analyzing}
+                className="btn-primary px-2.5 py-1 text-xs shrink-0"
+              >
+                {analyzing ? 'Analyzing…' : 'Re-Analyze'}
+              </button>
+            </div>
+          );
+        }
+
+        if (!snap || !cur) return null;
+
+        const diffs: { label: string; old: string; now: string }[] = [];
+        if (Math.abs(snap.targetCashOnCash - cur.targetCashOnCash) > 0.0001)
+          diffs.push({ label: 'CoC target', old: `${(snap.targetCashOnCash * 100).toFixed(1)}%`, now: `${(cur.targetCashOnCash * 100).toFixed(1)}%` });
+        if (Math.abs(snap.targetIRR - cur.targetIRR) > 0.0001)
+          diffs.push({ label: 'IRR target', old: `${(snap.targetIRR * 100).toFixed(1)}%`, now: `${(cur.targetIRR * 100).toFixed(1)}%` });
+        if (snap.holdPeriod !== cur.holdPeriod)
+          diffs.push({ label: 'Hold period', old: `${snap.holdPeriod} yr`, now: `${cur.holdPeriod} yr` });
+        if (Math.abs(snap.taxBracket - cur.taxBracket) > 0.0001)
+          diffs.push({ label: 'Tax bracket', old: `${(snap.taxBracket * 100).toFixed(0)}%`, now: `${(cur.taxBracket * 100).toFixed(0)}%` });
+        if (snap.riskTolerance !== cur.riskTolerance)
+          diffs.push({ label: 'Risk', old: snap.riskTolerance, now: cur.riskTolerance });
+        if (diffs.length === 0) return null;
+
+        return (
+          <div
+            className="px-4 py-3 flex-shrink-0"
+            style={{ backgroundColor: 'rgba(245,158,11,0.10)', borderBottom: '1px solid rgba(245,158,11,0.35)', borderLeft: '4px solid var(--warning)' }}
+          >
+            <div className="flex items-start gap-2.5">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}>
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold" style={{ color: 'var(--warning)' }}>
+                  Profile changed since last analysis — scores may not reflect your current targets
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5">
+                  {diffs.map(d => (
+                    <span key={d.label} className="text-xs" style={{ color: 'var(--muted)' }}>
+                      <span style={{ color: 'var(--text)' }}>{d.label}:</span>{' '}
+                      <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>{d.old}</span>
+                      {' → '}
+                      <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{d.now}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── No inputs state ─────────────────────────────────────────────────── */}
       {!hasInputs && !editingInputs && (
@@ -438,7 +522,7 @@ export default function DealView({
             {tab === 'overview'    && <DealOverviewTab metrics={deal.analysis!.metrics} score={deal.analysis!.score} inputs={deal.inputs!} />}
             {tab === 'apod'        && <APODTab metrics={deal.analysis!.metrics} inputs={deal.inputs!} proForma={deal.analysis!.proForma} />}
             {tab === 'proforma'    && <ProFormaTab proForma={deal.analysis!.proForma} />}
-            {tab === 'sensitivity' && <SensitivityTab sensitivity={deal.analysis!.sensitivity} />}
+            {tab === 'sensitivity' && <SensitivityTab sensitivity={deal.analysis!.sensitivity} investorProfile={investorProfile} />}
             {tab === 'montecarlo'  && deal.analysis!.monteCarlo && <MonteCarloTab result={deal.analysis!.monteCarlo} />}
             {tab === 'montecarlo'  && !deal.analysis!.monteCarlo && (
               <div className="flex flex-col items-center justify-center p-8 text-center" style={{ minHeight: 240 }}>

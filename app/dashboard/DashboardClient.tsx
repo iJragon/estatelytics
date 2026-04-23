@@ -81,6 +81,10 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
   const [compareDeals, setCompareDeals] = useState<Deal[]>([]);
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [investorProfile, setInvestorProfile] = useState<InvestorProfile | null>(null);
+  const [showCompareSelector, setShowCompareSelector] = useState(false);
+  const [selectedCompareIds, setSelectedCompareIds] = useState<Set<string>>(new Set());
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState('');
 
   // ── Portfolio view state ───────────────────────────────────────────────────
   const [properties, setProperties] = useState<PropertyEntry[]>(initialProperties);
@@ -834,22 +838,34 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
     }
   }
 
-  async function handleShowCompare() {
-    // Load full Deal objects for all deals that have been analyzed
-    const analyzed = deals.filter(d => d.status !== 'draft' || d.dealScore !== undefined);
-    const toLoad = analyzed.slice(0, 6); // cap at 6 for readability
+  function handleShowCompare() {
+    setSelectedCompareIds(new Set());
+    setCompareError('');
+    setShowCompareSelector(true);
+  }
+
+  async function handleConfirmCompare() {
+    setCompareLoading(true);
+    setCompareError('');
+    const toLoad = deals.filter(d => selectedCompareIds.has(d.id));
     const loaded: Deal[] = [];
+    let failed = 0;
     await Promise.all(toLoad.map(async entry => {
       try {
         const res = await fetch(`/api/deals/${entry.id}`);
-        if (!res.ok) return;
+        if (!res.ok) { failed++; return; }
         const { deal } = await res.json() as { deal: Deal };
         loaded.push(deal);
-      } catch { /* skip */ }
+      } catch { failed++; }
     }));
-    // Sort to match sidebar order
+    setCompareLoading(false);
+    if (loaded.length < 2) {
+      setCompareError(failed > 0 ? `Failed to load ${failed} deal${failed > 1 ? 's' : ''}. Try again.` : 'Select at least 2 deals to compare.');
+      return;
+    }
     const ordered = toLoad.map(e => loaded.find(d => d.id === e.id)).filter((d): d is Deal => !!d);
     setCompareDeals(ordered);
+    setShowCompareSelector(false);
     setShowCompare(true);
   }
 
@@ -962,96 +978,18 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
             }}
           />
         ) : activeView === 'deal' && activeDeal ? (
-          <>
-            {(() => {
-              if (!activeDeal.analysis) return null;
-              const snap = activeDeal.profileSnapshot;
-              const cur  = investorProfile;
-
-              // No snapshot = deal was analyzed before this feature was added.
-              // Show a neutral nudge so the user knows to re-analyze.
-              if (!snap && cur) {
-                return (
-                  <div
-                    className="px-4 py-2.5 flex-shrink-0 flex items-center gap-2.5"
-                    style={{
-                      backgroundColor: 'rgba(37,99,235,0.07)',
-                      borderBottom: '1px solid rgba(37,99,235,0.2)',
-                      borderLeft: '4px solid var(--accent)',
-                    }}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" style={{ flexShrink: 0 }}>
-                      <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-                    </svg>
-                    <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                      This analysis has no profile record. Re-Analyze to link it to your current investor profile.
-                    </p>
-                  </div>
-                );
-              }
-
-              if (!snap || !cur) return null;
-
-              // Compute which fields changed since this deal was last analyzed
-              const diffs: { label: string; old: string; now: string }[] = [];
-              if (Math.abs(snap.targetCashOnCash - cur.targetCashOnCash) > 0.0001)
-                diffs.push({ label: 'CoC target', old: `${(snap.targetCashOnCash * 100).toFixed(1)}%`, now: `${(cur.targetCashOnCash * 100).toFixed(1)}%` });
-              if (Math.abs(snap.targetIRR - cur.targetIRR) > 0.0001)
-                diffs.push({ label: 'IRR target', old: `${(snap.targetIRR * 100).toFixed(1)}%`, now: `${(cur.targetIRR * 100).toFixed(1)}%` });
-              if (snap.holdPeriod !== cur.holdPeriod)
-                diffs.push({ label: 'Hold period', old: `${snap.holdPeriod} yr`, now: `${cur.holdPeriod} yr` });
-              if (Math.abs(snap.taxBracket - cur.taxBracket) > 0.0001)
-                diffs.push({ label: 'Tax bracket', old: `${(snap.taxBracket * 100).toFixed(0)}%`, now: `${(cur.taxBracket * 100).toFixed(0)}%` });
-              if (snap.riskTolerance !== cur.riskTolerance)
-                diffs.push({ label: 'Risk', old: snap.riskTolerance, now: cur.riskTolerance });
-              if (diffs.length === 0) return null;
-
-              return (
-                <div
-                  className="px-4 py-3 flex-shrink-0"
-                  style={{
-                    backgroundColor: 'rgba(245,158,11,0.10)',
-                    borderBottom: '1px solid rgba(245,158,11,0.35)',
-                    borderLeft: '4px solid var(--warning)',
-                  }}
-                >
-                  <div className="flex items-start gap-2.5">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}>
-                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                      <line x1="12" y1="9" x2="12" y2="13" />
-                      <line x1="12" y1="17" x2="12.01" y2="17" />
-                    </svg>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold" style={{ color: 'var(--warning)' }}>
-                        Profile changed since last analysis — scores may not reflect your current targets
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5">
-                        {diffs.map(d => (
-                          <span key={d.label} className="text-xs" style={{ color: 'var(--muted)' }}>
-                            <span style={{ color: 'var(--text)' }}>{d.label}:</span>{' '}
-                            <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>{d.old}</span>
-                            {' → '}
-                            <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{d.now}</span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-            <DealView
-              key={activeDeal.id}
-              deal={activeDeal}
-              onUpdate={handleDealUpdate}
-              onDelete={handleDealDelete}
-              onShowProfile={handleLoadProfile}
-              onViewInPortfolio={handleViewInPortfolio}
-              onPropertyLinked={refreshProperties}
-              history={history}
-              properties={properties}
-            />
-          </>
+          <DealView
+            key={activeDeal.id}
+            deal={activeDeal}
+            onUpdate={handleDealUpdate}
+            onDelete={handleDealDelete}
+            onShowProfile={handleLoadProfile}
+            onViewInPortfolio={handleViewInPortfolio}
+            onPropertyLinked={refreshProperties}
+            history={history}
+            properties={properties}
+            investorProfile={investorProfile}
+          />
         ) : activeView === 'property' && (propertyLoading || propertyDetail) ? (
           // ── Property portfolio view ────────────────────────────────────────
           propertyLoading ? (
@@ -1316,6 +1254,76 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
           onSave={handleSaveProfile}
           onClose={() => setShowProfilePanel(false)}
         />
+      )}
+
+      {/* Compare Selector Modal */}
+      {showCompareSelector && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="rounded-xl shadow-2xl w-full max-w-md mx-4" style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
+              <h3 className="text-base font-semibold" style={{ color: 'var(--text)' }}>Select Deals to Compare</h3>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Choose 2–6 analyzed deals</p>
+            </div>
+            <div className="overflow-y-auto" style={{ maxHeight: 360 }}>
+              {deals.filter(d => d.status !== 'draft' || d.dealScore !== undefined).length === 0 ? (
+                <p className="px-5 py-6 text-sm text-center" style={{ color: 'var(--muted)' }}>No analyzed deals yet.</p>
+              ) : (
+                deals.filter(d => d.status !== 'draft' || d.dealScore !== undefined).map(deal => {
+                  const isChecked = selectedCompareIds.has(deal.id);
+                  const isDisabled = !isChecked && selectedCompareIds.size >= 6;
+                  return (
+                    <label
+                      key={deal.id}
+                      className="flex items-center gap-3 px-5 py-3 cursor-pointer"
+                      style={{ borderBottom: '1px solid var(--border)', opacity: isDisabled ? 0.45 : 1 }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        disabled={isDisabled}
+                        onChange={e => {
+                          const next = new Set(selectedCompareIds);
+                          if (e.target.checked) next.add(deal.id);
+                          else next.delete(deal.id);
+                          setSelectedCompareIds(next);
+                        }}
+                        className="w-4 h-4 rounded"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{deal.name}</p>
+                        {deal.address && <p className="text-xs truncate" style={{ color: 'var(--muted)' }}>{deal.address}</p>}
+                      </div>
+                      {deal.dealScore !== undefined && (
+                        <span className="text-xs font-bold shrink-0 px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(37,99,235,0.1)', color: 'var(--accent)' }}>
+                          {deal.dealScore}/100
+                        </span>
+                      )}
+                    </label>
+                  );
+                })
+              )}
+            </div>
+            {compareError && (
+              <p className="px-5 py-2 text-xs" style={{ color: 'var(--danger)', backgroundColor: 'rgba(239,68,68,0.05)' }}>{compareError}</p>
+            )}
+            <div className="px-5 py-4 flex items-center justify-between" style={{ borderTop: '1px solid var(--border)' }}>
+              <button
+                onClick={() => { setShowCompareSelector(false); setCompareError(''); }}
+                className="text-sm"
+                style={{ color: 'var(--muted)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmCompare}
+                disabled={selectedCompareIds.size < 2 || compareLoading}
+                className="btn-primary px-4 py-2 text-sm"
+              >
+                {compareLoading ? 'Loading…' : `Compare${selectedCompareIds.size >= 2 ? ` (${selectedCompareIds.size})` : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
