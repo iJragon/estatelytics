@@ -1,11 +1,12 @@
 'use client';
 
-import type { DealMetrics, ScoreBreakdown, DealInputs } from '@/lib/models/deal';
+import type { DealMetrics, ScoreBreakdown, DealInputs, InvestorProfile } from '@/lib/models/deal';
 
 interface Props {
   metrics: DealMetrics;
   score: ScoreBreakdown;
   inputs: DealInputs;
+  investorProfile?: InvestorProfile | null;
 }
 
 function fmt(n: number, type: 'dollar' | 'pct' | 'x' | 'int'): string {
@@ -87,7 +88,9 @@ function KpiCard({ value, label, color }: { value: string; label: string; color?
   );
 }
 
-export default function DealOverviewTab({ metrics: m, score, inputs }: Props) {
+export default function DealOverviewTab({ metrics: m, score, inputs, investorProfile }: Props) {
+  const cocTarget = investorProfile?.targetCashOnCash ?? 0.07;
+  const irrTarget = investorProfile?.targetIRR ?? 0.12;
   const verdict = VERDICT_CONFIG[score.verdict] ?? FALLBACK_VERDICT;
 
   return (
@@ -125,12 +128,12 @@ export default function DealOverviewTab({ metrics: m, score, inputs }: Props) {
         <KpiCard
           value={fmt(m.cashOnCash, 'pct')}
           label="Cash-on-Cash"
-          color={m.cashOnCash >= 0.07 ? 'var(--success)' : m.cashOnCash >= 0.04 ? 'var(--warning)' : 'var(--danger)'}
+          color={m.cashOnCash >= cocTarget ? 'var(--success)' : m.cashOnCash >= 0.04 ? 'var(--warning)' : 'var(--danger)'}
         />
         <KpiCard
           value={fmt(m.irr, 'pct')}
           label="IRR"
-          color={m.irr >= 0.12 ? 'var(--success)' : m.irr >= 0.08 ? 'var(--warning)' : 'var(--danger)'}
+          color={!isFinite(m.irr) ? 'var(--muted)' : m.irr >= irrTarget ? 'var(--success)' : m.irr >= 0.08 ? 'var(--warning)' : 'var(--danger)'}
         />
         <KpiCard
           value={fmt(m.dscr, 'x')}
@@ -173,12 +176,12 @@ export default function DealOverviewTab({ metrics: m, score, inputs }: Props) {
       {/* Time Value */}
       <SectionCard title="Time Value & Returns">
         <MetricRow label="NPV"                value={fmt(m.npv, 'dollar')} good={m.npv > 0} />
-        <MetricRow label="IRR"                value={fmt(m.irr, 'pct')}   good={m.irr >= 0.12} />
+        <MetricRow label="IRR"                value={fmt(m.irr, 'pct')}   good={isFinite(m.irr) ? m.irr >= irrTarget : null} />
         <MetricRow label="MIRR"               value={fmt(m.mirr, 'pct')}  good={m.mirr >= 0.10} indent />
         <MetricRow label="Profitability Index" value={fmt(m.profitabilityIndex, 'x')} good={m.profitabilityIndex > 1} />
         <MetricRow label="Payback Period"     value={`${m.paybackPeriod} yr`} good={m.paybackPeriod <= inputs.holdPeriod} indent />
         <MetricRow label="DCF Value"          value={fmt(m.dcfValue, 'dollar')} />
-        <MetricRow label="Gross Rent Multiplier" value={fmt(m.grm, 'x')} indent />
+        <MetricRow label="Gross Rent Multiplier" value={fmt(m.grm, 'x')} good={!isFinite(m.grm) ? null : m.grm < 10 ? true : m.grm > 18 ? false : null} indent />
       </SectionCard>
 
       {/* Exit */}

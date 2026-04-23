@@ -152,7 +152,7 @@ export default function InvestorProfilePanel({ profile, onSave, onClose }: Props
             label="Hold Period"
             hint="Expected years before exit"
             value={draft.holdPeriod}
-            min={1} max={20} step={1}
+            min={1} max={30} step={1}
             display={`${draft.holdPeriod} yr`}
             onChange={v => set('holdPeriod', v)}
           />

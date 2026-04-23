@@ -519,7 +519,7 @@ export default function DealView({
           </div>
 
           <div className="flex-1 overflow-hidden">
-            {tab === 'overview'    && <DealOverviewTab metrics={deal.analysis!.metrics} score={deal.analysis!.score} inputs={deal.inputs!} />}
+            {tab === 'overview'    && <DealOverviewTab metrics={deal.analysis!.metrics} score={deal.analysis!.score} inputs={deal.inputs!} investorProfile={investorProfile} />}
             {tab === 'apod'        && <APODTab metrics={deal.analysis!.metrics} inputs={deal.inputs!} proForma={deal.analysis!.proForma} />}
             {tab === 'proforma'    && <ProFormaTab proForma={deal.analysis!.proForma} />}
             {tab === 'sensitivity' && <SensitivityTab sensitivity={deal.analysis!.sensitivity} investorProfile={investorProfile} />}

@@ -973,8 +973,13 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
             onClose={() => setShowCompare(false)}
             onSelectDeal={deal => {
               setShowCompare(false);
-              const entry = deals.find(d => d.id === deal.id);
-              if (entry) handleDealSelect(entry);
+              setActiveDeal(deal);
+              setActiveDealId(deal.id);
+              setActiveView('deal');
+              setDeals(prev => prev.map(d => d.id === deal.id
+                ? { ...d, status: deal.status, dealScore: deal.analysis?.score?.total ?? d.dealScore }
+                : d,
+              ));
             }}
           />
         ) : activeView === 'deal' && activeDeal ? (

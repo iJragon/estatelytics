@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { DealInputs, OperatingExpenseBreakdown, ValidationWarning } from '@/lib/models/deal';
 import { DEFAULT_DEAL_INPUTS } from '@/lib/models/deal';
 import { validateDealInputs } from '@/lib/analysis/deal-validation';
@@ -269,12 +269,122 @@ function T12ImportModal({ history, onImport, onClose }: T12ModalProps) {
   );
 }
 
+// ── Spreadsheet Import Modal ──────────────────────────────────────────────────
+
+interface FileImportModalProps {
+  onImport: (inputs: Partial<DealInputs>) => void;
+  onClose: () => void;
+}
+
+function FileImportModal({ onImport, onClose }: FileImportModalProps) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [importNote, setImportNote] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    setLoading(true);
+    setError('');
+    setImportNote('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/deals/file-import', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? 'Import failed');
+      }
+      const { inputs, importNotes } = await res.json() as { inputs: Partial<DealInputs>; importNotes: string };
+      if (importNotes) setImportNote(importNotes);
+      onImport(inputs);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import');
+      setLoading(false);
+    }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="rounded-xl p-5 max-w-md w-full mx-4 shadow-xl"
+        style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Import from Spreadsheet</h3>
+          <button onClick={onClose} className="p-1 rounded" style={{ color: 'var(--muted)' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
+          Upload any Excel or CSV file — deal assumptions, rent rolls, pro formas, any format. AI extracts what it can; missing fields default to current market rates.
+        </p>
+
+        {error && (
+          <p className="text-xs mb-3 px-3 py-2 rounded" style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#dc2626' }}>
+            {error}
+          </p>
+        )}
+        {importNote && (
+          <p className="text-xs mb-3 px-3 py-2 rounded" style={{ backgroundColor: 'rgba(37,99,235,0.06)', color: 'var(--muted)', border: '1px solid rgba(37,99,235,0.15)' }}>
+            {importNote}
+          </p>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-xs" style={{ color: 'var(--accent)' }}>
+            <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 11-6.219-8.56" />
+            </svg>
+            AI reading spreadsheet…
+          </div>
+        ) : (
+          <div
+            className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors"
+            style={{ borderColor: 'var(--border)' }}
+            onDragOver={e => e.preventDefault()}
+            onDrop={handleDrop}
+            onClick={() => fileRef.current?.click()}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+          >
+            <svg className="mx-auto mb-2" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--muted)' }}>
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>Drop file here or click to browse</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>.xlsx · .xls · .csv</p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function DealInputForm({ initialInputs, onSave, onCancel, saving, history }: Props) {
   const [step, setStep] = useState<Step>('property');
   const [inputs, setInputs] = useState<DealInputs>(initialInputs ?? DEFAULT_DEAL_INPUTS);
   const [showT12Modal, setShowT12Modal] = useState(false);
+  const [showFileImportModal, setShowFileImportModal] = useState(false);
 
   const warnings = validateDealInputs(inputs);
   const stepWarnings = warnings.filter(w => w.step === step);
@@ -286,6 +396,30 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving,
 
   function setExpense(key: keyof OperatingExpenseBreakdown, value: number) {
     setInputs(prev => ({ ...prev, expenses: { ...prev.expenses, [key]: value } }));
+  }
+
+  function applyFileImport(prefill: Partial<DealInputs>) {
+    setInputs(prev => ({
+      ...prev,
+      ...(prefill.purchasePrice       !== undefined && { purchasePrice:        prefill.purchasePrice }),
+      ...(prefill.downPayment         !== undefined && { downPayment:          prefill.downPayment }),
+      ...(prefill.interestRate        !== undefined && { interestRate:         prefill.interestRate }),
+      ...(prefill.amortizationYears   !== undefined && { amortizationYears:    prefill.amortizationYears }),
+      ...(prefill.loanTermYears       !== undefined && { loanTermYears:        prefill.loanTermYears }),
+      ...(prefill.closingCostRate     !== undefined && { closingCostRate:      prefill.closingCostRate }),
+      ...(prefill.capexBudget         !== undefined && { capexBudget:          prefill.capexBudget }),
+      ...(prefill.grossScheduledIncome !== undefined && { grossScheduledIncome: prefill.grossScheduledIncome }),
+      ...(prefill.otherIncome         !== undefined && { otherIncome:          prefill.otherIncome }),
+      ...(prefill.vacancyRate         !== undefined && { vacancyRate:          prefill.vacancyRate }),
+      ...(prefill.rentGrowthRate      !== undefined && { rentGrowthRate:       prefill.rentGrowthRate }),
+      ...(prefill.expenseGrowthRate   !== undefined && { expenseGrowthRate:    prefill.expenseGrowthRate }),
+      ...(prefill.exitCapRate         !== undefined && { exitCapRate:          prefill.exitCapRate }),
+      ...(prefill.holdPeriod          !== undefined && { holdPeriod:           prefill.holdPeriod }),
+      ...(prefill.propertyType        !== undefined && { propertyType:         prefill.propertyType }),
+      expenses: prefill.expenses ? { ...prev.expenses, ...prefill.expenses } : prev.expenses,
+    }));
+    setShowFileImportModal(false);
+    setStep('property');
   }
 
   function applyT12Import(prefill: Partial<DealInputs>) {
@@ -366,6 +500,16 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving,
 
         {step === 'property' && (
           <>
+            <button
+              onClick={() => setShowFileImportModal(true)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm"
+              style={{ border: '1px dashed var(--accent)', color: 'var(--accent)', backgroundColor: 'rgba(37,99,235,0.04)' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              Import from Spreadsheet
+            </button>
             <Field label="Property Type">
               <div className="flex gap-2">
                 {(['residential', 'commercial', 'mixed'] as const).map(pt => (
@@ -582,6 +726,14 @@ export default function DealInputForm({ initialInputs, onSave, onCancel, saving,
           history={history ?? []}
           onImport={applyT12Import}
           onClose={() => setShowT12Modal(false)}
+        />
+      )}
+
+      {/* Spreadsheet Import Modal */}
+      {showFileImportModal && (
+        <FileImportModal
+          onImport={applyFileImport}
+          onClose={() => setShowFileImportModal(false)}
         />
       )}
     </div>

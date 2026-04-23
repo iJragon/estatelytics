@@ -26,10 +26,10 @@ function cocStyle(cell: SensitivityCell, cocTarget: number): CellStyle {
 }
 
 function irrStyle(cell: SensitivityCell, irrTarget: number): CellStyle {
+  if (!cell.isViable || !isFinite(cell.irr)) return BAD;
   const pct = cell.irr * 100;
-  if (!cell.isViable)          return BAD;
-  if (pct >= irrTarget * 100)  return GOOD;
-  if (pct >= irrTarget * 70)   return WARN;
+  if (pct >= irrTarget * 100) return GOOD;
+  if (pct >= irrTarget * 70)  return WARN;
   return WARN;
 }
 
@@ -99,7 +99,7 @@ function HeatTable({
                         borderBottom: '1px solid var(--border)',
                         borderRadius: 4,
                       }}
-                      title={`CoC: ${(cell.cashOnCash * 100).toFixed(1)}% | DSCR: ${cell.dscr.toFixed(2)}x | IRR: ${(cell.irr * 100).toFixed(1)}%`}
+                      title={`CoC: ${(cell.cashOnCash * 100).toFixed(1)}% | DSCR: ${cell.dscr.toFixed(2)}x | IRR: ${isFinite(cell.irr) ? (cell.irr * 100).toFixed(1) + '%' : 'N/A'}`}
                     >
                       {getValue(cell)}
                     </td>
@@ -146,7 +146,7 @@ export default function SensitivityTab({ sensitivity, investorProfile }: Props) 
         description={`Internal Rate of Return across all scenarios. Green ≥ ${(irrTarget * 100).toFixed(0)}% (your target), Yellow = marginal, Red = non-viable.`}
         sensitivity={sensitivity}
         getStyle={cell => irrStyle(cell, irrTarget)}
-        getValue={cell => `${(cell.irr * 100).toFixed(1)}%`}
+        getValue={cell => isFinite(cell.irr) ? `${(cell.irr * 100).toFixed(1)}%` : 'N/A'}
       />
       <HeatTable
         title="DSCR"
