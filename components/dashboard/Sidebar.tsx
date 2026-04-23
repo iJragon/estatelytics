@@ -22,7 +22,6 @@ interface SidebarProps {
   analyzeProgress?: { current: number; total: number } | null;
   onFilesSelect: (files: File[]) => void;
   onAnalyze: () => void;
-  onForceAnalyze: () => void;
   onHistorySelect: (entry: HistoryEntry) => void;
   onHistoryDelete: (id: string) => void;
   onHistoryRename: (id: string, newName: string) => Promise<void>;
@@ -122,7 +121,6 @@ export default function Sidebar({
   analyzeProgress,
   onFilesSelect,
   onAnalyze,
-  onForceAnalyze,
   onHistorySelect,
   onHistoryDelete,
   onHistoryRename,
@@ -721,19 +719,6 @@ export default function Sidebar({
                 {isAnalyzing ? progressLabel : 'Analyze'}
               </button>
 
-              {(hasFiles || hasAnalysis) && !isAnalyzing && (
-                <button
-                  onClick={onForceAnalyze}
-                  className="w-full mt-1.5 text-xs py-1.5 px-3 rounded-md border transition-colors hover:opacity-80 flex items-center justify-center gap-1.5"
-                  style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="23 4 23 10 17 10" />
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                  </svg>
-                  Force Re-analyze
-                </button>
-              )}
             </div>
 
             {/* History section */}

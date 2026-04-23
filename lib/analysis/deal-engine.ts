@@ -336,21 +336,35 @@ function percentile(sorted: number[], p: number): number {
 export function runMonteCarlo(
   inputs: DealInputs,
   profile: InvestorProfile,
-  iterations = 1000,
+  iterations = 2000,
 ): MonteCarloResult {
+  // Risk-adjusted std devs: properties with higher base vacancy have wider
+  // uncertainty bands because the market signal is already weaker.
+  const vStd  = Math.max(0.02, Math.min(0.10, 0.02 + inputs.vacancyRate * 0.30));
+  const rgStd = Math.max(0.015, Math.min(0.05, 0.015 + inputs.vacancyRate * 0.12));
+  const egStd = 0.012;
+  const ecStd = Math.max(0.005, Math.min(0.015, 0.005 + inputs.vacancyRate * 0.025));
+
+  // Vacancy and rent growth are negatively correlated: the same weak rental
+  // market that pushes vacancy up also suppresses rent growth. ρ = -0.50.
+  const rho = -0.50;
+  const rhoComp = Math.sqrt(1 - rho * rho); // ≈ 0.866
+
   const irrArr: number[] = [];
   const cocArr: number[] = [];
   const dscrArr: number[] = [];
   const viableArr: boolean[] = [];
 
   for (let i = 0; i < iterations; i++) {
-    const modified: DealInputs = {
-      ...inputs,
-      vacancyRate:     clampVal(normal(inputs.vacancyRate, 0.03), 0, 0.40),
-      rentGrowthRate:  clampVal(normal(inputs.rentGrowthRate, 0.015), -0.05, 0.12),
-      expenseGrowthRate: clampVal(normal(inputs.expenseGrowthRate, 0.01), 0, 0.08),
-      exitCapRate:     clampVal(normal(inputs.exitCapRate, 0.005), 0.03, 0.15),
-    };
+    const z1 = boxMuller(); // drives vacancy
+    const z2 = boxMuller(); // independent component for rent growth
+
+    const vacancyRate       = clampVal(inputs.vacancyRate       + vStd  * z1,                       0,     0.70);
+    const rentGrowthRate    = clampVal(inputs.rentGrowthRate    + rgStd * (rho * z1 + rhoComp * z2), -0.10, 0.15);
+    const expenseGrowthRate = clampVal(normal(inputs.expenseGrowthRate, egStd),                       0,     0.10);
+    const exitCapRate       = clampVal(normal(inputs.exitCapRate, ecStd),                             0.03,  0.20);
+
+    const modified: DealInputs = { ...inputs, vacancyRate, rentGrowthRate, expenseGrowthRate, exitCapRate };
 
     try {
       const pf = buildProForma(modified);
@@ -360,7 +374,7 @@ export function runMonteCarlo(
       dscrArr.push(m.dscr);
       viableArr.push(m.dscr >= 1.0 && m.cashFlowBeforeTax > 0);
     } catch {
-      // Skip invalid combinations
+      // skip invalid combinations
     }
   }
 

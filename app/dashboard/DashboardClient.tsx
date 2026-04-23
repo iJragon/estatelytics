@@ -81,7 +81,7 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
   const [compareDeals, setCompareDeals] = useState<Deal[]>([]);
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [investorProfile, setInvestorProfile] = useState<InvestorProfile | null>(null);
-  const [profileJustUpdated, setProfileJustUpdated] = useState(false);
+  const [profileUpdatedAt, setProfileUpdatedAt] = useState<string | null>(null);
 
   // ── Portfolio view state ───────────────────────────────────────────────────
   const [properties, setProperties] = useState<PropertyEntry[]>(initialProperties);
@@ -796,7 +796,6 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
   }
 
   async function handleDealSelect(entry: DealEntry) {
-    setProfileJustUpdated(false);
     setActiveView('deal');
     setActiveDealId(entry.id);
     try {
@@ -855,9 +854,10 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
     try {
       const res = await fetch('/api/investor-profile');
       if (!res.ok) return;
-      const { profile } = await res.json() as { profile: InvestorProfile | null };
+      const { profile, profileUpdatedAt: updatedAt } = await res.json() as { profile: InvestorProfile | null; profileUpdatedAt: string | null };
       const { DEFAULT_INVESTOR_PROFILE } = await import('@/lib/models/deal');
       setInvestorProfile(profile ?? DEFAULT_INVESTOR_PROFILE);
+      if (updatedAt) setProfileUpdatedAt(updatedAt);
     } catch { /* use defaults */ } finally {
       setShowProfilePanel(true);
     }
@@ -870,12 +870,9 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
       body: JSON.stringify(profile),
     });
     if (res.ok) {
-      const { profile: saved } = await res.json() as { profile: InvestorProfile };
+      const { profile: saved, profileUpdatedAt: updatedAt } = await res.json() as { profile: InvestorProfile; profileUpdatedAt: string };
       setInvestorProfile(saved);
-      // Prompt re-analysis if an analyzed deal is open
-      if (activeDeal?.analysis) {
-        setProfileJustUpdated(true);
-      }
+      if (updatedAt) setProfileUpdatedAt(updatedAt);
     }
   }
 
@@ -912,7 +909,6 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
         analyzeProgress={analyzeProgress}
         onFilesSelect={handleFilesSelect}
         onAnalyze={handleAnalyze}
-        onForceAnalyze={handleForceAnalyze}
         onHistorySelect={handleHistorySelect}
         onHistoryDelete={handleHistoryDelete}
         onHistoryRename={handleHistoryRename}
@@ -949,40 +945,28 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
           />
         ) : activeView === 'deal' && activeDeal ? (
           <>
-            {profileJustUpdated && activeDeal.analysis && (
+            {activeDeal.analysis && profileUpdatedAt && activeDeal.aiAnalyzedAt && profileUpdatedAt > activeDeal.aiAnalyzedAt && (
               <div
-                className="flex items-center justify-between px-4 py-3 gap-3 flex-shrink-0"
+                className="flex items-center px-4 py-3 gap-3 flex-shrink-0"
                 style={{
                   backgroundColor: 'rgba(245,158,11,0.13)',
                   borderBottom: '3px solid rgba(245,158,11,0.5)',
                   borderLeft: '4px solid var(--warning)',
                 }}
               >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" style={{ flexShrink: 0 }}>
-                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                    <line x1="12" y1="9" x2="12" y2="13" />
-                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                  </svg>
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: 'var(--warning)' }}>
-                      Investor profile updated
-                    </p>
-                    <p className="text-xs" style={{ color: 'var(--text)', opacity: 0.8 }}>
-                      This deal was analyzed with your old targets. Hit Re-Analyze to apply your new profile.
-                    </p>
-                  </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" style={{ flexShrink: 0 }}>
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--warning)' }}>
+                    Investor profile updated
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--text)', opacity: 0.8 }}>
+                    This analysis used your old targets. Hit Re-Analyze to apply your current profile.
+                  </p>
                 </div>
-                <button
-                  onClick={() => setProfileJustUpdated(false)}
-                  className="flex-shrink-0 p-1.5 rounded hover:opacity-60 transition-opacity"
-                  style={{ color: 'var(--muted)' }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
               </div>
             )}
             <DealView
@@ -1045,6 +1029,19 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
                   <p style={{ color: 'var(--muted)' }}>No file analyzed</p>
                 )}
               </div>
+              {analysis && !isAnalyzing && (
+                <button
+                  onClick={handleForceAnalyze}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded border transition-colors hover:opacity-80"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text)', backgroundColor: 'var(--surface)' }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="23 4 23 10 17 10" />
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                  </svg>
+                  Re-analyze
+                </button>
+              )}
             </div>
 
             {/* Tabs */}
@@ -1111,7 +1108,7 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
               {duplicateNotice && (
                 <div className="alert-info mb-4 p-3 rounded-md text-sm flex items-center gap-2">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                  {duplicateNotice} Use Force Re-analyze in the sidebar to re-run the AI extraction.
+                  {duplicateNotice} Click Re-analyze (top right) to re-run the AI extraction.
                 </div>
               )}
 

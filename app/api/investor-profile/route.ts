@@ -26,7 +26,7 @@ export async function GET() {
     holdPeriod: data.hold_period,
   };
 
-  return NextResponse.json({ profile });
+  return NextResponse.json({ profile, profileUpdatedAt: data.updated_at ?? null });
 }
 
 // PATCH /api/investor-profile - upsert investor profile
@@ -63,5 +63,6 @@ export async function PATCH(request: NextRequest) {
       riskTolerance: data.risk_tolerance,
       holdPeriod: data.hold_period,
     },
+    profileUpdatedAt: data.updated_at,
   });
 }
