@@ -26,6 +26,7 @@ import PropertyView from '@/components/portfolio/PropertyView';
 import DealView from '@/components/deals/DealView';
 import DealCompareView from '@/components/deals/DealCompareView';
 import InvestorProfilePanel from '@/components/deals/InvestorProfilePanel';
+import NetworkAnimation from '@/components/dashboard/NetworkAnimation';
 
 interface DashboardClientProps {
   userEmail: string;
@@ -1134,21 +1135,50 @@ export default function DashboardClient({ userEmail, initialHistory, initialProp
               )}
 
               {!isAnalyzing && !analysis && (
-                <div className="flex flex-col items-center justify-center h-full gap-6 text-center">
-                  <div>
-                    <h2 className="text-xl font-semibold mb-2" style={{ color: 'var(--text)' }}>
-                      Welcome to Estatelytics
-                    </h2>
-                    <p className="max-w-md" style={{ color: 'var(--muted)' }}>
-                      Upload an Excel P&L statement using the sidebar to get started. You&apos;ll receive
-                      automated ratio analysis, AI insights, trend detection, and anomaly alerts.
-                      Or create a Property to track multiple statements over time.
-                    </p>
+                <div className="relative flex flex-col items-center justify-center h-full overflow-hidden rounded-lg">
+                  {/* Full-bleed animated background */}
+                  <div className="absolute inset-0">
+                    <NetworkAnimation />
                   </div>
-                  <div className="grid grid-cols-3 gap-4 max-w-lg">
-                    {['Financial Ratios', 'AI Insights', 'Trend Analysis', 'Anomaly Detection', 'Chat Interface', 'Property Portfolio'].map(f => (
-                      <div key={f} className="card text-sm text-center" style={{ color: 'var(--muted)' }}>{f}</div>
-                    ))}
+
+                  {/* Content overlay */}
+                  <div className="relative z-10 flex flex-col items-center gap-8 text-center px-8 py-12">
+                    <div>
+                      <h2
+                        className="text-3xl font-bold mb-3 tracking-tight"
+                        style={{ color: '#e8f4ff', textShadow: '0 0 40px rgba(0,150,220,0.4)' }}
+                      >
+                        Estatelytics
+                      </h2>
+                      <p className="max-w-sm text-sm leading-relaxed" style={{ color: 'rgba(180,210,240,0.75)' }}>
+                        Upload an Excel or CSV file to get started — ratio analysis, AI insights,
+                        trend detection, and anomaly alerts in seconds.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 max-w-md">
+                      {[
+                        'Financial Ratios',
+                        'AI Insights',
+                        'Trend Analysis',
+                        'Anomaly Detection',
+                        'Chat Interface',
+                        'Property Portfolio',
+                      ].map(f => (
+                        <div
+                          key={f}
+                          className="px-3 py-2 rounded-lg text-xs font-medium"
+                          style={{
+                            backgroundColor: 'rgba(0,150,220,0.08)',
+                            border: '1px solid rgba(0,150,220,0.18)',
+                            color: 'rgba(160,220,255,0.8)',
+                            backdropFilter: 'blur(8px)',
+                          }}
+                        >
+                          {f}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
