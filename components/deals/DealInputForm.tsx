@@ -31,23 +31,33 @@ function Field({
   label,
   hint,
   children,
-  extracted,
+  imported,
+  estimated,
 }: {
   label: string;
   hint?: string;
   children: React.ReactNode;
-  extracted?: boolean;
+  imported?: boolean;
+  estimated?: boolean;
 }) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-1">
         <label className="text-sm font-medium" style={{ color: 'var(--text)' }}>{label}</label>
-        {extracted && (
+        {imported && (
           <span
             className="px-1.5 py-0.5 rounded-full font-semibold uppercase"
             style={{ fontSize: '0.6rem', letterSpacing: '0.06em', backgroundColor: 'rgba(34,197,94,0.12)', color: 'var(--success)' }}
           >
-            from PDF
+            imported
+          </span>
+        )}
+        {!imported && estimated && (
+          <span
+            className="px-1.5 py-0.5 rounded-full font-semibold uppercase"
+            style={{ fontSize: '0.6rem', letterSpacing: '0.06em', backgroundColor: 'rgba(234,179,8,0.12)', color: 'var(--warning)' }}
+          >
+            estimated
           </span>
         )}
       </div>
@@ -285,7 +295,7 @@ function T12ImportModal({ history, onImport, onClose }: T12ModalProps) {
 // ── Spreadsheet Import Modal ──────────────────────────────────────────────────
 
 interface FileImportModalProps {
-  onImport: (inputs: Partial<DealInputs>) => void;
+  onImport: (inputs: Partial<DealInputs>, suggested: Partial<DealInputs>) => void;
   onClose: () => void;
 }
 
@@ -342,9 +352,9 @@ function FileImportModal({ onImport, onClose }: FileImportModalProps) {
         const err = await res.json().catch(() => ({})) as { error?: string };
         throw new Error(err.error ?? 'Import failed');
       }
-      const { inputs, importNotes } = await res.json() as { inputs: Partial<DealInputs>; importNotes: string };
+      const { inputs, suggested, importNotes } = await res.json() as { inputs: Partial<DealInputs>; suggested: Partial<DealInputs>; importNotes: string };
       if (importNotes) setImportNote(importNotes);
-      onImport(inputs);
+      onImport(inputs, suggested ?? {});
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to import');
       setLoading(false);
@@ -434,7 +444,8 @@ export default function DealInputForm({ dealId, initialInputs, onSave, onCancel,
   const [showT12Modal, setShowT12Modal] = useState(false);
   const [showFileImportModal, setShowFileImportModal] = useState(false);
   const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [extractedFields, setExtractedFields] = useState<Set<string>>(new Set());
+  const [importedFields, setImportedFields] = useState<Set<string>>(new Set());
+  const [estimatedFields, setEstimatedFields] = useState<Set<string>>(new Set());
 
   const timerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestRef      = useRef(inputs);
@@ -497,22 +508,35 @@ export default function DealInputForm({ dealId, initialInputs, onSave, onCancel,
     setInputs(prev => ({ ...prev, expenses: { ...prev.expenses, [key]: value } }));
   }
 
-  function applyFileImport(prefill: Partial<DealInputs>) {
-    // Track which fields were actually extracted so the form can highlight them
-    const extracted = new Set<string>();
+  function applyFileImport(prefill: Partial<DealInputs>, suggested: Partial<DealInputs> = {}) {
     const topKeys: Array<keyof DealInputs> = [
       'purchasePrice', 'downPayment', 'interestRate', 'amortizationYears', 'loanTermYears',
       'closingCostRate', 'capexBudget', 'grossScheduledIncome', 'otherIncome',
       'vacancyRate', 'rentGrowthRate', 'expenseGrowthRate', 'exitCapRate', 'holdPeriod', 'propertyType',
     ];
-    for (const k of topKeys) { if (prefill[k] !== undefined) extracted.add(k); }
+
+    const imported = new Set<string>();
+    for (const k of topKeys) { if (prefill[k] !== undefined) imported.add(k); }
     if (prefill.expenses) {
-      for (const k of Object.keys(prefill.expenses)) extracted.add(`expenses.${k}`);
+      for (const k of Object.keys(prefill.expenses)) imported.add(`expenses.${k}`);
     }
-    setExtractedFields(extracted);
+    setImportedFields(imported);
+
+    const estimated = new Set<string>();
+    for (const k of topKeys) { if (suggested[k] !== undefined && !imported.has(k)) estimated.add(k); }
+    if (suggested.expenses) {
+      for (const k of Object.keys(suggested.expenses)) {
+        if (!imported.has(`expenses.${k}`)) estimated.add(`expenses.${k}`);
+      }
+    }
+    setEstimatedFields(estimated);
 
     setInputs(prev => ({
       ...prev,
+      // Apply AI estimates first (lower priority), then imported values override
+      ...(suggested.capexBudget          !== undefined && !imported.has('capexBudget')          && { capexBudget:          suggested.capexBudget }),
+      ...(suggested.vacancyRate          !== undefined && !imported.has('vacancyRate')          && { vacancyRate:          suggested.vacancyRate }),
+      ...(suggested.exitCapRate          !== undefined && !imported.has('exitCapRate')          && { exitCapRate:          suggested.exitCapRate }),
       ...(prefill.purchasePrice        !== undefined && { purchasePrice:        prefill.purchasePrice }),
       ...(prefill.downPayment          !== undefined && { downPayment:          prefill.downPayment }),
       ...(prefill.interestRate         !== undefined && { interestRate:         prefill.interestRate }),
@@ -528,7 +552,11 @@ export default function DealInputForm({ dealId, initialInputs, onSave, onCancel,
       ...(prefill.exitCapRate          !== undefined && { exitCapRate:          prefill.exitCapRate }),
       ...(prefill.holdPeriod           !== undefined && { holdPeriod:           prefill.holdPeriod }),
       ...(prefill.propertyType         !== undefined && { propertyType:         prefill.propertyType }),
-      expenses: prefill.expenses ? { ...prev.expenses, ...prefill.expenses } : prev.expenses,
+      expenses: {
+        ...prev.expenses,
+        ...suggested.expenses,   // estimates first
+        ...prefill.expenses,     // document values override estimates
+      },
     }));
     setShowFileImportModal(false);
     setStep('property');
@@ -540,7 +568,7 @@ export default function DealInputForm({ dealId, initialInputs, onSave, onCancel,
     if (prefill.expenses) {
       for (const k of Object.keys(prefill.expenses)) extracted.add(`expenses.${k}`);
     }
-    setExtractedFields(prev => new Set([...prev, ...extracted]));
+    setImportedFields(prev => new Set([...prev, ...extracted]));
 
     setInputs(prev => ({
       ...prev,
@@ -624,7 +652,7 @@ export default function DealInputForm({ dealId, initialInputs, onSave, onCancel,
               </svg>
               Import from Spreadsheet or PDF
             </button>
-            <Field label="Property Type" extracted={extractedFields.has('propertyType')}>
+            <Field label="Property Type" imported={importedFields.has('propertyType')} estimated={estimatedFields.has('propertyType')}>
               <div className="flex gap-2">
                 {(['residential', 'commercial', 'mixed'] as const).map(pt => (
                   <button
@@ -642,13 +670,13 @@ export default function DealInputForm({ dealId, initialInputs, onSave, onCancel,
                 ))}
               </div>
             </Field>
-            <Field label="Purchase Price" extracted={extractedFields.has('purchasePrice')}>
+            <Field label="Purchase Price" imported={importedFields.has('purchasePrice')} estimated={estimatedFields.has('purchasePrice')}>
               <NumberInput value={inputs.purchasePrice} onChange={v => set('purchasePrice', v)} prefix="$" />
             </Field>
-            <Field label="Closing Cost Rate" hint="Typically 2–4% of purchase price" extracted={extractedFields.has('closingCostRate')}>
+            <Field label="Closing Cost Rate" hint="Typically 2–4% of purchase price" imported={importedFields.has('closingCostRate')} estimated={estimatedFields.has('closingCostRate')}>
               <PctInput value={inputs.closingCostRate} onChange={v => set('closingCostRate', v)} />
             </Field>
-            <Field label="CapEx Budget" hint="Planned capital improvements at purchase" extracted={extractedFields.has('capexBudget')}>
+            <Field label="CapEx Budget" hint="Planned capital improvements at purchase" imported={importedFields.has('capexBudget')} estimated={estimatedFields.has('capexBudget')}>
               <NumberInput value={inputs.capexBudget} onChange={v => set('capexBudget', v)} prefix="$" />
             </Field>
             <Field label="Depreciation Schedule">
@@ -680,7 +708,7 @@ export default function DealInputForm({ dealId, initialInputs, onSave, onCancel,
             <p className="text-xs px-1 py-1.5 rounded" style={{ color: 'var(--muted)', backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}>
               Down payment, interest rate, and loan terms are not typically found in offering memoranda — obtain these from your lender or broker.
             </p>
-            <Field label="Down Payment" hint="Dollar amount (not a percentage)" extracted={extractedFields.has('downPayment')}>
+            <Field label="Down Payment" hint="Dollar amount (not a percentage)" imported={importedFields.has('downPayment')} estimated={estimatedFields.has('downPayment')}>
               <NumberInput value={inputs.downPayment} onChange={v => set('downPayment', v)} prefix="$" />
             </Field>
             {inputs.purchasePrice > 0 && inputs.downPayment > 0 && (
@@ -689,13 +717,13 @@ export default function DealInputForm({ dealId, initialInputs, onSave, onCancel,
                 ({((1 - inputs.downPayment / inputs.purchasePrice) * 100).toFixed(1)}% LTV)
               </p>
             )}
-            <Field label="Interest Rate (Annual)" extracted={extractedFields.has('interestRate')}>
+            <Field label="Interest Rate (Annual)" imported={importedFields.has('interestRate')} estimated={estimatedFields.has('interestRate')}>
               <PctInput value={inputs.interestRate} onChange={v => set('interestRate', v)} />
             </Field>
-            <Field label="Amortization Period" extracted={extractedFields.has('amortizationYears')}>
+            <Field label="Amortization Period" imported={importedFields.has('amortizationYears')} estimated={estimatedFields.has('amortizationYears')}>
               <NumberInput value={inputs.amortizationYears} onChange={v => set('amortizationYears', v)} suffix="years" />
             </Field>
-            <Field label="Loan Term (Balloon)" hint="When the balloon payment is due (≤ amortization period)" extracted={extractedFields.has('loanTermYears')}>
+            <Field label="Loan Term (Balloon)" hint="When the balloon payment is due (≤ amortization period)" imported={importedFields.has('loanTermYears')} estimated={estimatedFields.has('loanTermYears')}>
               <NumberInput value={inputs.loanTermYears} onChange={v => set('loanTermYears', v)} suffix="years" />
             </Field>
           </>
@@ -719,10 +747,10 @@ export default function DealInputForm({ dealId, initialInputs, onSave, onCancel,
                 Import from T12 Analysis
               </button>
             )}
-            <Field label="Gross Scheduled Income" hint="Annual potential rental income at 100% occupancy" extracted={extractedFields.has('grossScheduledIncome')}>
+            <Field label="Gross Scheduled Income" hint="Annual potential rental income at 100% occupancy" imported={importedFields.has('grossScheduledIncome')} estimated={estimatedFields.has('grossScheduledIncome')}>
               <NumberInput value={inputs.grossScheduledIncome} onChange={v => set('grossScheduledIncome', v)} prefix="$" />
             </Field>
-            <Field label="Other Income" hint="Annual parking, laundry, storage, etc." extracted={extractedFields.has('otherIncome')}>
+            <Field label="Other Income" hint="Annual parking, laundry, storage, etc." imported={importedFields.has('otherIncome')} estimated={estimatedFields.has('otherIncome')}>
               <NumberInput value={inputs.otherIncome} onChange={v => set('otherIncome', v)} prefix="$" />
             </Field>
           </>
@@ -750,7 +778,7 @@ export default function DealInputForm({ dealId, initialInputs, onSave, onCancel,
               Enter annual operating expenses. Leave at $0 for categories that don&apos;t apply.
             </p>
             {expenseFields.map(({ key, label }) => (
-              <Field key={key} label={label} extracted={extractedFields.has(`expenses.${key}`)}>
+              <Field key={key} label={label} imported={importedFields.has(`expenses.${key}`)} estimated={estimatedFields.has(`expenses.${key}`)}>
                 <NumberInput
                   value={inputs.expenses[key]}
                   onChange={v => setExpense(key, v)}
@@ -771,19 +799,19 @@ export default function DealInputForm({ dealId, initialInputs, onSave, onCancel,
 
         {step === 'assumptions' && (
           <>
-            <Field label="Vacancy Rate" hint="Expected percentage of time units are empty" extracted={extractedFields.has('vacancyRate')}>
+            <Field label="Vacancy Rate" hint="Expected percentage of time units are empty" imported={importedFields.has('vacancyRate')} estimated={estimatedFields.has('vacancyRate')}>
               <PctInput value={inputs.vacancyRate} onChange={v => set('vacancyRate', v)} />
             </Field>
-            <Field label="Annual Rent Growth" extracted={extractedFields.has('rentGrowthRate')}>
+            <Field label="Annual Rent Growth" imported={importedFields.has('rentGrowthRate')} estimated={estimatedFields.has('rentGrowthRate')}>
               <PctInput value={inputs.rentGrowthRate} onChange={v => set('rentGrowthRate', v)} />
             </Field>
-            <Field label="Annual Expense Growth" extracted={extractedFields.has('expenseGrowthRate')}>
+            <Field label="Annual Expense Growth" imported={importedFields.has('expenseGrowthRate')} estimated={estimatedFields.has('expenseGrowthRate')}>
               <PctInput value={inputs.expenseGrowthRate} onChange={v => set('expenseGrowthRate', v)} />
             </Field>
-            <Field label="Exit Cap Rate" hint="Expected cap rate when you sell" extracted={extractedFields.has('exitCapRate')}>
+            <Field label="Exit Cap Rate" hint="Expected cap rate when you sell" imported={importedFields.has('exitCapRate')} estimated={estimatedFields.has('exitCapRate')}>
               <PctInput value={inputs.exitCapRate} onChange={v => set('exitCapRate', v)} />
             </Field>
-            <Field label="Hold Period" extracted={extractedFields.has('holdPeriod')}>
+            <Field label="Hold Period" imported={importedFields.has('holdPeriod')} estimated={estimatedFields.has('holdPeriod')}>
               <NumberInput value={inputs.holdPeriod} onChange={v => set('holdPeriod', v)} suffix="years" />
             </Field>
             <Field label="Selling Cost Rate" hint="Broker commissions, transfer taxes, etc.">
